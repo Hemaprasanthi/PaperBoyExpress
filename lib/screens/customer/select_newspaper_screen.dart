@@ -52,6 +52,18 @@ class _SelectNewspaperScreenState extends State<SelectNewspaperScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    // Pre-fill address from the customer's saved profile, if they have one.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final profile = context.read<AppState>().currentCustomerProfile;
+      if (profile != null && _addressController.text.isEmpty) {
+        setState(() => _addressController.text = profile.address);
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final newspapers = context.watch<AppState>().newspapers;
 

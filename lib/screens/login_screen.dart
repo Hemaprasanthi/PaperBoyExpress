@@ -5,6 +5,7 @@ import '../state/app_state.dart';
 import 'customer/customer_home_screen.dart';
 import 'admin/admin_home_screen.dart';
 import 'delivery/delivery_home_screen.dart';
+import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -18,13 +19,22 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   String? _error;
   bool _obscure = true;
+  bool _submitting = false;
 
-  void _submit() {
+  Future<void> _submit() async {
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+
     final appState = context.read<AppState>();
-    final error = appState.login(
+    final error = await appState.login(
       _usernameController.text.trim(),
       _passwordController.text.trim(),
     );
+
+    if (!mounted) return;
+    setState(() => _submitting = false);
 
     if (error != null) {
       setState(() => _error = error);
@@ -71,7 +81,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const Icon(Icons.newspaper, size: 64, color: Colors.indigo),
                   const SizedBox(height: 12),
                   Text(
-                    'Paperboy',
+                    'NewsBucket',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                           fontWeight: FontWeight.bold,
@@ -89,7 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextField(
                     controller: _usernameController,
                     decoration: const InputDecoration(
-                      labelText: 'Username',
+                      labelText: 'Email, phone, or username',
                       prefixIcon: Icon(Icons.person_outline),
                       border: OutlineInputBorder(),
                     ),
@@ -115,11 +125,26 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                   const SizedBox(height: 24),
                   FilledButton(
-                    onPressed: _submit,
+                    onPressed: _submitting ? null : _submit,
                     style: FilledButton.styleFrom(padding: const EdgeInsets.all(16)),
-                    child: const Text('Sign In'),
+                    child: _submitting
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Text('Sign In'),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const SignupScreen()),
+                      );
+                    },
+                    child: const Text('New customer? Create an account'),
+                  ),
+                  const SizedBox(height: 8),
                   Text(
                     'Demo accounts (password: "password")',
                     textAlign: TextAlign.center,

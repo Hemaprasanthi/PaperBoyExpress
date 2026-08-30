@@ -15,13 +15,18 @@ class CustomerHomeScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Subscriptions'),
+        title: Text(
+          appState.currentCustomerProfile != null
+              ? 'Hi, ${appState.currentCustomerProfile!.name.split(' ').first}'
+              : 'My Subscriptions',
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Sign out',
-            onPressed: () {
-              context.read<AppState>().logout();
+            onPressed: () async {
+              await context.read<AppState>().logout();
+              if (!context.mounted) return;
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const LoginScreen()),
                 (route) => false,

@@ -26,13 +26,14 @@ class AdminHomeScreen extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.logout),
               tooltip: 'Sign out',
-              onPressed: () {
-                context.read<AppState>().logout();
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  (route) => false,
-                );
-              },
+            onPressed: () async {
+              await context.read<AppState>().logout();
+              if (!context.mounted) return;
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                (route) => false,
+              );
+            },
             ),
           ],
         ),
@@ -64,8 +65,9 @@ class _AllSubscriptionsTab extends StatelessWidget {
         return Card(
           child: ListTile(
             leading: const CircleAvatar(child: Icon(Icons.person)),
-            title: Text('${s.customerUsername} · ${s.newspaper.name}'),
+            title: Text('${s.customerName ?? s.customerUsername} · ${s.newspaper.name}'),
             subtitle: Text(
+              '${s.customerPhone != null ? "${s.customerPhone}\n" : ""}'
               '${s.copiesPerDelivery}x copy · ${s.weekdaysLabel}\n'
               'Starts ${s.startDate.day}/${s.startDate.month}/${s.startDate.year} · ${s.address}\n'
               'Delivery: ${s.assignedDeliveryBoy ?? "Unassigned"}',
@@ -105,7 +107,7 @@ class _AssignDeliveryTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${s.newspaper.name} → ${s.customerUsername}',
+                Text('${s.newspaper.name} → ${s.customerName ?? s.customerUsername}',
                     style: const TextStyle(fontWeight: FontWeight.bold)),
                 Text(s.address, style: TextStyle(color: Colors.grey[600])),
                 const SizedBox(height: 8),

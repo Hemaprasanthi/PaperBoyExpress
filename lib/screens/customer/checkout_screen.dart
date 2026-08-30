@@ -58,7 +58,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     if (!mounted) return;
 
-    context.read<AppState>().createSubscription(
+    await context.read<AppState>().createSubscription(
           newspaper: widget.newspaper,
           selectedWeekdays: widget.selectedWeekdays,
           copiesPerDelivery: widget.copiesPerDelivery,
