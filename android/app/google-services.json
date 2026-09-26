@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "941502151107",
+    "project_id": "paperboy-express",
+    "storage_bucket": "paperboy-express.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:941502151107:android:0fe983dda19dcb10bb2576",
+        "android_client_info": {
+          "package_name": "com.example.paperboy"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBtLl81XA4Vc92FxX3BHQjaNIXYue3TIts"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -4,9 +4,10 @@ import '../../state/app_state.dart';
 import '../login_screen.dart';
 
 /// Delivery boy view.
-/// By design this screen ONLY renders newspaper name + address for
-/// subscriptions the admin has assigned to this delivery account.
-/// It never reads/displays customer usernames, prices, or other subs.
+/// By design this screen ONLY renders newspaper name, delivery frequency,
+/// and address for subscriptions the admin has assigned to this delivery
+/// account. It never reads/displays customer identity, phone, price, copy
+/// count, or any other subscription's data.
 class DeliveryHomeScreen extends StatelessWidget {
   const DeliveryHomeScreen({super.key});
 
@@ -65,11 +66,11 @@ class DeliveryHomeScreen extends StatelessWidget {
                 return Card(
                   child: ListTile(
                     leading: const CircleAvatar(child: Icon(Icons.newspaper)),
-                    // Only the newspaper name and the address are shown —
-                    // nothing about the customer or price.
+                    // Only newspaper name, frequency, and address are shown -
+                    // nothing about the customer, price, or copy count.
                     title: Text(s.newspaper.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text(s.address),
-                    trailing: Text('${s.copiesPerDelivery}x'),
+                    subtitle: Text('${s.weekdaysLabel}\n${s.address}'),
+                    isThreeLine: true,
                   ),
                 );
               },

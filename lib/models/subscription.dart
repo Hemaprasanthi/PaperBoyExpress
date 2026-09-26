@@ -11,6 +11,8 @@ const Map<int, String> kWeekdayLabels = {
   DateTime.sunday: 'Sun',
 };
 
+enum SubscriptionStatus { active, cancelled }
+
 class Subscription {
   final String id;
   final String customerUsername;
@@ -23,6 +25,7 @@ class Subscription {
   final DateTime startDate;
   String? assignedDeliveryBoy; // null until admin assigns
   final DateTime createdAt;
+  final SubscriptionStatus status;
 
   Subscription({
     required this.id,
@@ -36,6 +39,7 @@ class Subscription {
     required this.startDate,
     this.assignedDeliveryBoy,
     DateTime? createdAt,
+    this.status = SubscriptionStatus.active,
   }) : createdAt = createdAt ?? DateTime.now();
 
   int get frequencyPerWeek => selectedWeekdays.length;
@@ -65,6 +69,7 @@ class Subscription {
       'startDate': startDate.toIso8601String(),
       'assignedDeliveryBoy': assignedDeliveryBoy,
       'createdAt': createdAt.toIso8601String(),
+      'status': status.name,
     };
   }
 
@@ -88,6 +93,10 @@ class Subscription {
       startDate: DateTime.parse(map['startDate'] as String),
       assignedDeliveryBoy: map['assignedDeliveryBoy'] as String?,
       createdAt: DateTime.parse(map['createdAt'] as String),
+      status: SubscriptionStatus.values.firstWhere(
+        (s) => s.name == (map['status'] as String? ?? 'active'),
+        orElse: () => SubscriptionStatus.active,
+      ),
     );
   }
 }

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/subscription.dart';
 import '../../state/app_state.dart';
 import '../login_screen.dart';
 import 'select_newspaper_screen.dart';
+import 'subscription_detail_screen.dart';
 
 class CustomerHomeScreen extends StatelessWidget {
   const CustomerHomeScreen({super.key});
@@ -63,10 +65,37 @@ class CustomerHomeScreen extends StatelessWidget {
               itemCount: subs.length,
               itemBuilder: (context, index) {
                 final s = subs[index];
+                final isActive = s.status == SubscriptionStatus.active;
                 return Card(
                   child: ListTile(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => SubscriptionDetailScreen(subscription: s),
+                        ),
+                      );
+                    },
                     leading: const CircleAvatar(child: Icon(Icons.newspaper)),
-                    title: Text(s.newspaper.name),
+                    title: Row(
+                      children: [
+                        Expanded(child: Text(s.newspaper.name)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isActive ? Colors.green[100] : Colors.grey[300],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            isActive ? 'Active' : 'Cancelled',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: isActive ? Colors.green[800] : Colors.grey[700],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                     subtitle: Text(
                       '${s.copiesPerDelivery}x copy · ${s.weekdaysLabel}\n'
                       'Starts ${s.startDate.day}/${s.startDate.month}/${s.startDate.year} · ${s.address}',
@@ -80,15 +109,7 @@ class CustomerHomeScreen extends StatelessWidget {
                           '\$${s.monthlyPrice.toStringAsFixed(2)}/mo',
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
-                        Text(
-                          s.assignedDeliveryBoy == null ? 'Unassigned' : 'Delivery set',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: s.assignedDeliveryBoy == null
-                                ? Colors.orange
-                                : Colors.green,
-                          ),
-                        ),
+                        const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
                       ],
                     ),
                   ),

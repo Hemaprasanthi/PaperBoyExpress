@@ -179,6 +179,12 @@ class AppState extends ChangeNotifier {
   List<Subscription> subscriptionsForCustomer(String username) =>
       _subscriptions.where((s) => s.customerUsername == username).toList();
 
+  Future<void> cancelSubscription(String subscriptionId) async {
+    await _subscriptionsRef.doc(subscriptionId).update({
+      'status': SubscriptionStatus.cancelled.name,
+    });
+  }
+
   // ---------- Admin ----------
   List<Subscription> get allSubscriptions => subscriptions;
 
@@ -191,6 +197,10 @@ class AppState extends ChangeNotifier {
   }
 
   // ---------- Delivery boy ----------
-  List<Subscription> subscriptionsAssignedTo(String deliveryUsername) =>
-      _subscriptions.where((s) => s.assignedDeliveryBoy == deliveryUsername).toList();
+  // Only active subscriptions are shown - once cancelled, delivery no
+  // longer needs to see it on their route.
+  List<Subscription> subscriptionsAssignedTo(String deliveryUsername) => _subscriptions
+      .where((s) =>
+          s.assignedDeliveryBoy == deliveryUsername && s.status == SubscriptionStatus.active)
+      .toList();
 }

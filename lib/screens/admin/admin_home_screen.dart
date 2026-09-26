@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/subscription.dart';
 import '../../state/app_state.dart';
 import '../login_screen.dart';
 
@@ -62,10 +63,32 @@ class _AllSubscriptionsTab extends StatelessWidget {
       itemCount: subs.length,
       itemBuilder: (context, index) {
         final s = subs[index];
+        final isActive = s.status == SubscriptionStatus.active;
         return Card(
           child: ListTile(
             leading: const CircleAvatar(child: Icon(Icons.person)),
-            title: Text('${s.customerName ?? s.customerUsername} · ${s.newspaper.name}'),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text('${s.customerName ?? s.customerUsername} · ${s.newspaper.name}'),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isActive ? Colors.green[100] : Colors.grey[300],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    isActive ? 'Active' : 'Cancelled',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: isActive ? Colors.green[800] : Colors.grey[700],
+                    ),
+                  ),
+                ),
+              ],
+            ),
             subtitle: Text(
               '${s.customerPhone != null ? "${s.customerPhone}\n" : ""}'
               '${s.copiesPerDelivery}x copy · ${s.weekdaysLabel}\n'
