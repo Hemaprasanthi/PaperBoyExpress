@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../../models/subscription.dart';
 import '../../state/app_state.dart';
 import '../login_screen.dart';
+import 'admin_subscription_edit_screen.dart';
+import 'pricing_screen.dart';
 
 class AdminHomeScreen extends StatelessWidget {
   const AdminHomeScreen({super.key});
@@ -13,7 +15,7 @@ class AdminHomeScreen extends StatelessWidget {
     final subs = appState.allSubscriptions;
 
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Admin Dashboard'),
@@ -21,6 +23,7 @@ class AdminHomeScreen extends StatelessWidget {
             tabs: [
               Tab(text: 'All Subscriptions', icon: Icon(Icons.list_alt)),
               Tab(text: 'Assign Delivery', icon: Icon(Icons.local_shipping)),
+              Tab(text: 'Pricing', icon: Icon(Icons.sell_outlined)),
             ],
           ),
           actions: [
@@ -42,6 +45,7 @@ class AdminHomeScreen extends StatelessWidget {
           children: [
             _AllSubscriptionsTab(subs: subs),
             _AssignDeliveryTab(subs: subs),
+            const PricingScreen(),
           ],
         ),
       ),
@@ -66,6 +70,13 @@ class _AllSubscriptionsTab extends StatelessWidget {
         final isActive = s.status == SubscriptionStatus.active;
         return Card(
           child: ListTile(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => AdminSubscriptionEditScreen(subscription: s),
+                ),
+              );
+            },
             leading: const CircleAvatar(child: Icon(Icons.person)),
             title: Row(
               children: [
@@ -96,9 +107,16 @@ class _AllSubscriptionsTab extends StatelessWidget {
               'Delivery: ${s.assignedDeliveryBoy ?? "Unassigned"}',
             ),
             isThreeLine: true,
-            trailing: Text(
-              '\$${s.monthlyPrice.toStringAsFixed(2)}/mo',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '\$${s.monthlyPrice.toStringAsFixed(2)}/mo',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+              ],
             ),
           ),
         );

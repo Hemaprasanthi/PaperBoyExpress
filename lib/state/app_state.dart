@@ -5,6 +5,7 @@ import '../models/user.dart';
 import '../models/newspaper.dart';
 import '../models/subscription.dart';
 import '../models/customer_profile.dart';
+import '../models/newspaper_pricing.dart';
 import '../data/mock_data.dart';
 
 class AppState extends ChangeNotifier {
@@ -23,10 +24,15 @@ class AppState extends ChangeNotifier {
       FirebaseFirestore.instance.collection('customers');
   final CollectionReference<Map<String, dynamic>> _emailIndexRef =
       FirebaseFirestore.instance.collection('emailIndex');
+  final CollectionReference<Map<String, dynamic>> _pricingRef =
+      FirebaseFirestore.instance.collection('pricing');
 
   List<Subscription> _subscriptions = [];
   List<Subscription> get subscriptions => List.unmodifiable(_subscriptions);
   bool subscriptionsLoaded = false;
+
+  Map<String, NewspaperPricing> _pricing = {};
+  bool pricingLoaded = false;
 
   AppState() {
     _subscriptionsRef.snapshots().listen((snapshot) {
@@ -36,10 +42,56 @@ class AppState extends ChangeNotifier {
       subscriptionsLoaded = true;
       notifyListeners();
     });
+
+    _pricingRef.snapshots().listen((snapshot) {
+      _pricing = {
+        for (final doc in snapshot.docs) doc.id: NewspaperPricing.fromMap(doc.id, doc.data()),
+      };
+      pricingLoaded = true;
+      notifyListeners();
+    });
   }
 
   Newspaper _newspaperById(String id) {
     return newspapers.firstWhere((n) => n.id == id, orElse: () => newspapers.first);
+  }
+
+  // ---------- Pricing ----------
+
+  /// The base price for a newspaper: the admin-set price if one exists,
+  /// otherwise the catalog default from mock_data.dart.
+  double basePriceFor(String newspaperId) {
+    return _pricing[newspaperId]?.basePrice ?? _newspaperById(newspaperId).pricePerCopy;
+  }
+
+  /// The price that actually applies for a newspaper at a given zip code -
+  /// a zip-specific override if the admin set one, otherwise the base price.
+  double priceFor(String newspaperId, {String? zip}) {
+    final pricing = _pricing[newspaperId];
+    if (pricing != null) return pricing.priceForZip(zip);
+    return _newspaperById(newspaperId).pricePerCopy;
+  }
+
+  /// Zip overrides currently set for a newspaper, as {zip: price}.
+  Map<String, double> zipOverridesFor(String newspaperId) =>
+      _pricing[newspaperId]?.zipOverrides ?? {};
+
+  Future<void> setBasePrice(String newspaperId, double price) async {
+    await _pricingRef.doc(newspaperId).set({'basePrice': price}, SetOptions(merge: true));
+  }
+
+  Future<void> setZipPrice(String newspaperId, String zip, double price) async {
+    await _pricingRef.doc(newspaperId).set({
+      'basePrice': basePriceFor(newspaperId), // ensure basePrice exists even on first write
+      'zipOverrides': {..._pricing[newspaperId]?.zipOverrides ?? {}, zip: price},
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> removeZipPrice(String newspaperId, String zip) async {
+    final updated = {...(_pricing[newspaperId]?.zipOverrides ?? {})}..remove(zip);
+    await _pricingRef.doc(newspaperId).set({
+      'zipOverrides': updated,
+    }, SetOptions(merge: true));
   }
 
   // ---------- Auth: demo admin/delivery + real customer accounts ----------
@@ -161,7 +213,9 @@ class AppState extends ChangeNotifier {
     required int copiesPerDelivery,
     required String address,
     required DateTime startDate,
+    String? zipCode,
   }) async {
+    final effectivePrice = priceFor(newspaper.id, zip: zipCode);
     final sub = Subscription(
       id: '',
       customerUsername: currentUser!.username,
@@ -172,6 +226,8 @@ class AppState extends ChangeNotifier {
       copiesPerDelivery: copiesPerDelivery,
       address: address,
       startDate: startDate,
+      zipCode: zipCode,
+      pricePerCopyAtSignup: effectivePrice,
     );
     await _subscriptionsRef.add(sub.toMap());
   }
@@ -185,6 +241,12 @@ class AppState extends ChangeNotifier {
     });
   }
 
+  Future<void> reactivateSubscription(String subscriptionId) async {
+    await _subscriptionsRef.doc(subscriptionId).update({
+      'status': SubscriptionStatus.active.name,
+    });
+  }
+
   // ---------- Admin ----------
   List<Subscription> get allSubscriptions => subscriptions;
 
@@ -194,6 +256,24 @@ class AppState extends ChangeNotifier {
 
   Future<void> unassignDelivery(String subscriptionId) async {
     await _subscriptionsRef.doc(subscriptionId).update({'assignedDeliveryBoy': null});
+  }
+
+  /// Full admin edit: lets admin change any editable field on a subscription.
+  Future<void> adminUpdateSubscription(
+    String subscriptionId, {
+    required String newspaperId,
+    required List<int> selectedWeekdays,
+    required int copiesPerDelivery,
+    required String address,
+    required DateTime startDate,
+  }) async {
+    await _subscriptionsRef.doc(subscriptionId).update({
+      'newspaperId': newspaperId,
+      'selectedWeekdays': selectedWeekdays,
+      'copiesPerDelivery': copiesPerDelivery,
+      'address': address,
+      'startDate': startDate.toIso8601String(),
+    });
   }
 
   // ---------- Delivery boy ----------

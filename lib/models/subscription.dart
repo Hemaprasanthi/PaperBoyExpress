@@ -26,6 +26,8 @@ class Subscription {
   String? assignedDeliveryBoy; // null until admin assigns
   final DateTime createdAt;
   final SubscriptionStatus status;
+  final String? zipCode; // customer's zip at signup, used to look up pricing
+  final double pricePerCopyOverride; // price locked in at signup time; -1 means "use newspaper.pricePerCopy" (legacy docs)
 
   Subscription({
     required this.id,
@@ -40,7 +42,10 @@ class Subscription {
     this.assignedDeliveryBoy,
     DateTime? createdAt,
     this.status = SubscriptionStatus.active,
-  }) : createdAt = createdAt ?? DateTime.now();
+    this.zipCode,
+    double? pricePerCopyAtSignup,
+  })  : createdAt = createdAt ?? DateTime.now(),
+        pricePerCopyOverride = pricePerCopyAtSignup ?? -1;
 
   int get frequencyPerWeek => selectedWeekdays.length;
 
@@ -50,9 +55,15 @@ class Subscription {
     return sorted.map((d) => kWeekdayLabels[d]).join(', ');
   }
 
+  /// The price per copy actually charged for this subscription - locked in
+  /// at signup time so later admin price changes don't retroactively affect
+  /// existing subscriptions. Falls back to the newspaper's catalog price for
+  /// older subscriptions created before pricing was tracked per-subscription.
+  double get effectivePricePerCopy =>
+      pricePerCopyOverride >= 0 ? pricePerCopyOverride : newspaper.pricePerCopy;
+
   /// Rough monthly estimate: price * copies * deliveries/week * ~4.33 weeks/month
-  double get monthlyPrice =>
-      newspaper.pricePerCopy * copiesPerDelivery * frequencyPerWeek * 4.33;
+  double get monthlyPrice => effectivePricePerCopy * copiesPerDelivery * frequencyPerWeek * 4.33;
 
   /// Converts this subscription into a Firestore-friendly map.
   /// The newspaper is stored by id and looked back up from the catalog
@@ -70,6 +81,8 @@ class Subscription {
       'assignedDeliveryBoy': assignedDeliveryBoy,
       'createdAt': createdAt.toIso8601String(),
       'status': status.name,
+      'zipCode': zipCode,
+      'pricePerCopyAtSignup': pricePerCopyOverride >= 0 ? pricePerCopyOverride : null,
     };
   }
 
@@ -97,6 +110,8 @@ class Subscription {
         (s) => s.name == (map['status'] as String? ?? 'active'),
         orElse: () => SubscriptionStatus.active,
       ),
+      zipCode: map['zipCode'] as String?,
+      pricePerCopyAtSignup: (map['pricePerCopyAtSignup'] as num?)?.toDouble(),
     );
   }
 }

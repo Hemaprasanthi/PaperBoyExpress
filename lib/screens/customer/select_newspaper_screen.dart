@@ -18,10 +18,14 @@ class _SelectNewspaperScreenState extends State<SelectNewspaperScreen> {
   int _copiesPerDelivery = 1;
   DateTime? _startDate;
   final _addressController = TextEditingController();
+  final _zipController = TextEditingController();
 
   double get _estimatedMonthly {
     if (_selected == null || _selectedDays.isEmpty) return 0;
-    return _selected!.pricePerCopy * _copiesPerDelivery * _selectedDays.length * 4.33;
+    final appState = context.read<AppState>();
+    final zip = _zipController.text.trim();
+    final price = appState.priceFor(_selected!.id, zip: zip.isEmpty ? null : zip);
+    return price * _copiesPerDelivery * _selectedDays.length * 4.33;
   }
 
   bool get _canContinue =>
@@ -80,7 +84,9 @@ class _SelectNewspaperScreenState extends State<SelectNewspaperScreen> {
               groupValue: _selected,
               onChanged: (v) => setState(() => _selected = v),
               title: Text(n.name),
-              subtitle: Text('\$${n.pricePerCopy.toStringAsFixed(2)} / copy'),
+              subtitle: Text(
+                '\$${context.watch<AppState>().basePriceFor(n.id).toStringAsFixed(2)} / copy',
+              ),
               dense: true,
             ),
           ),
@@ -163,6 +169,16 @@ class _SelectNewspaperScreenState extends State<SelectNewspaperScreen> {
               border: OutlineInputBorder(),
             ),
           ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _zipController,
+            keyboardType: TextInputType.number,
+            onChanged: (_) => setState(() {}), // pricing may change with zip
+            decoration: const InputDecoration(
+              labelText: 'Zip code (optional - pricing may vary by area)',
+              border: OutlineInputBorder(),
+            ),
+          ),
           const SizedBox(height: 24),
           if (_selected != null && _selectedDays.isNotEmpty)
             Card(
@@ -193,6 +209,9 @@ class _SelectNewspaperScreenState extends State<SelectNewspaperScreen> {
                           copiesPerDelivery: _copiesPerDelivery,
                           address: _addressController.text.trim(),
                           startDate: _startDate!,
+                          zipCode: _zipController.text.trim().isEmpty
+                              ? null
+                              : _zipController.text.trim(),
                         ),
                       ),
                     );

@@ -10,6 +10,7 @@ class CheckoutScreen extends StatefulWidget {
   final int copiesPerDelivery;
   final String address;
   final DateTime startDate;
+  final String? zipCode;
 
   const CheckoutScreen({
     super.key,
@@ -18,6 +19,7 @@ class CheckoutScreen extends StatefulWidget {
     required this.copiesPerDelivery,
     required this.address,
     required this.startDate,
+    this.zipCode,
   });
 
   @override
@@ -30,11 +32,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final _cvvController = TextEditingController();
   bool _processing = false;
 
-  double get _monthlyPrice =>
-      widget.newspaper.pricePerCopy *
-      widget.copiesPerDelivery *
-      widget.selectedWeekdays.length *
-      4.33;
+  double get _monthlyPrice {
+    final price = context.read<AppState>().priceFor(widget.newspaper.id, zip: widget.zipCode);
+    return price * widget.copiesPerDelivery * widget.selectedWeekdays.length * 4.33;
+  }
 
   String get _weekdaysLabel {
     final sorted = [...widget.selectedWeekdays]..sort();
@@ -64,6 +65,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           copiesPerDelivery: widget.copiesPerDelivery,
           address: widget.address,
           startDate: widget.startDate,
+          zipCode: widget.zipCode,
         );
 
     setState(() => _processing = false);
