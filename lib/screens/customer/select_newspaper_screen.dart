@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../models/newspaper.dart';
 import '../../models/subscription.dart';
 import '../../state/app_state.dart';
+import '../../utils/currency.dart';
 import 'checkout_screen.dart';
 
 class SelectNewspaperScreen extends StatefulWidget {
@@ -85,7 +86,7 @@ class _SelectNewspaperScreenState extends State<SelectNewspaperScreen> {
               onChanged: (v) => setState(() => _selected = v),
               title: Text(n.name),
               subtitle: Text(
-                '\$${context.watch<AppState>().basePriceFor(n.id).toStringAsFixed(2)} / copy',
+                '${formatInr(context.watch<AppState>().basePriceFor(n.id))} / copy',
               ),
               dense: true,
             ),
@@ -190,7 +191,7 @@ class _SelectNewspaperScreenState extends State<SelectNewspaperScreen> {
                   children: [
                     const Text('Estimated monthly cost'),
                     Text(
-                      '\$${_estimatedMonthly.toStringAsFixed(2)}',
+                      formatInr(_estimatedMonthly),
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                     ),
                   ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/subscription.dart';
 import '../../state/app_state.dart';
+import '../../utils/currency.dart';
 import '../login_screen.dart';
 import 'admin_subscription_edit_screen.dart';
 import 'pricing_screen.dart';
@@ -112,7 +113,7 @@ class _AllSubscriptionsTab extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '\$${s.monthlyPrice.toStringAsFixed(2)}/mo',
+                  '${formatInr(s.monthlyPrice)}/mo',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const Icon(Icons.chevron_right, size: 18, color: Colors.grey),

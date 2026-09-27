@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../state/app_state.dart';
+import '../../utils/currency.dart';
 
 class PricingScreen extends StatefulWidget {
   const PricingScreen({super.key});
@@ -23,7 +24,7 @@ class _PricingScreenState extends State<PricingScreen> {
         content: TextField(
           controller: controller,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(prefixText: '\$ ', border: OutlineInputBorder()),
+          decoration: const InputDecoration(prefixText: '₹ ', border: OutlineInputBorder()),
           autofocus: true,
         ),
         actions: [
@@ -90,7 +91,7 @@ class _PricingScreenState extends State<PricingScreen> {
               trailing: TextButton(
                 onPressed: () => _editBasePrice(context, n.id, price),
                 child: Text(
-                  '\$${price.toStringAsFixed(2)}',
+                  formatInr(price),
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                 ),
               ),
@@ -140,7 +141,7 @@ class _PricingScreenState extends State<PricingScreen> {
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(
                     labelText: 'Price for this zip',
-                    prefixText: '\$ ',
+                    prefixText: '₹ ',
                     border: OutlineInputBorder(),
                     isDense: true,
                   ),
@@ -181,7 +182,7 @@ class _PricingScreenState extends State<PricingScreen> {
                           children: [
                             Expanded(child: Text(newspaperName)),
                             Text(
-                              '\$${e.value.toStringAsFixed(2)}',
+                              formatInr(e.value),
                               style: const TextStyle(fontWeight: FontWeight.bold),
                             ),
                             IconButton(

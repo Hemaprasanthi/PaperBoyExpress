@@ -6,6 +6,7 @@ import '../models/newspaper.dart';
 import '../models/subscription.dart';
 import '../models/customer_profile.dart';
 import '../models/newspaper_pricing.dart';
+import '../models/payment.dart';
 import '../data/mock_data.dart';
 
 class AppState extends ChangeNotifier {
@@ -18,6 +19,7 @@ class AppState extends ChangeNotifier {
       kUsers.where((u) => u.role == UserRole.delivery).map((u) => u.username).toList();
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
   final CollectionReference<Map<String, dynamic>> _subscriptionsRef =
       FirebaseFirestore.instance.collection('subscriptions');
   final CollectionReference<Map<String, dynamic>> _customersRef =
@@ -26,6 +28,8 @@ class AppState extends ChangeNotifier {
       FirebaseFirestore.instance.collection('emailIndex');
   final CollectionReference<Map<String, dynamic>> _pricingRef =
       FirebaseFirestore.instance.collection('pricing');
+  final CollectionReference<Map<String, dynamic>> _paymentsRef =
+      FirebaseFirestore.instance.collection('payments');
 
   List<Subscription> _subscriptions = [];
   List<Subscription> get subscriptions => List.unmodifiable(_subscriptions);
@@ -33,6 +37,10 @@ class AppState extends ChangeNotifier {
 
   Map<String, NewspaperPricing> _pricing = {};
   bool pricingLoaded = false;
+
+  List<Payment> _payments = [];
+  List<Payment> get payments => List.unmodifiable(_payments);
+  bool paymentsLoaded = false;
 
   AppState() {
     _subscriptionsRef.snapshots().listen((snapshot) {
@@ -48,6 +56,13 @@ class AppState extends ChangeNotifier {
         for (final doc in snapshot.docs) doc.id: NewspaperPricing.fromMap(doc.id, doc.data()),
       };
       pricingLoaded = true;
+      notifyListeners();
+    });
+
+    _paymentsRef.snapshots().listen((snapshot) {
+      _payments = snapshot.docs.map((doc) => Payment.fromMap(doc.id, doc.data())).toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      paymentsLoaded = true;
       notifyListeners();
     });
   }
@@ -214,6 +229,7 @@ class AppState extends ChangeNotifier {
     required String address,
     required DateTime startDate,
     String? zipCode,
+    required String paymentMethod, // e.g. "PhonePe" or "Skipped (Test Mode)"
   }) async {
     final effectivePrice = priceFor(newspaper.id, zip: zipCode);
     final sub = Subscription(
@@ -229,11 +245,40 @@ class AppState extends ChangeNotifier {
       zipCode: zipCode,
       pricePerCopyAtSignup: effectivePrice,
     );
-    await _subscriptionsRef.add(sub.toMap());
+
+    final amount = effectivePrice * copiesPerDelivery * selectedWeekdays.length * 4.33;
+    final periodEnd = DateTime(startDate.year, startDate.month + 1, startDate.day);
+
+    final subRef = _subscriptionsRef.doc();
+    final paymentRef = _paymentsRef.doc();
+    final now = DateTime.now();
+
+    final payment = Payment(
+      id: '',
+      subscriptionId: subRef.id,
+      customerUsername: currentUser!.username,
+      newspaperName: newspaper.name,
+      copiesPerDelivery: copiesPerDelivery,
+      periodStart: startDate,
+      periodEnd: periodEnd,
+      amount: amount,
+      status: PaymentStatus.paid, // everything is treated as successful for now (test mode)
+      createdAt: now,
+      paidAt: now,
+      method: paymentMethod,
+    );
+
+    final batch = _db.batch();
+    batch.set(subRef, sub.toMap());
+    batch.set(paymentRef, payment.toMap());
+    await batch.commit();
   }
 
   List<Subscription> subscriptionsForCustomer(String username) =>
       _subscriptions.where((s) => s.customerUsername == username).toList();
+
+  List<Payment> paymentsForCustomer(String username) =>
+      _payments.where((p) => p.customerUsername == username).toList();
 
   Future<void> cancelSubscription(String subscriptionId) async {
     await _subscriptionsRef.doc(subscriptionId).update({

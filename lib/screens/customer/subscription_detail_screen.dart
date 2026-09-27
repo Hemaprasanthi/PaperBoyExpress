@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/subscription.dart';
 import '../../state/app_state.dart';
+import '../../utils/currency.dart';
 
 class SubscriptionDetailScreen extends StatefulWidget {
   final Subscription subscription;
@@ -114,7 +115,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
           _DetailRow(
             icon: Icons.currency_rupee,
             label: 'Monthly cost',
-            value: '\$${current.monthlyPrice.toStringAsFixed(2)}',
+            value: formatInr(current.monthlyPrice),
           ),
           const SizedBox(height: 32),
           if (isActive)
