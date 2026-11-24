@@ -2,6 +2,7 @@ class CustomerProfile {
   final String uid;
   final String name;
   final String address;
+  final String zipCode;
   final String phone;
   final String? email;
 
@@ -9,6 +10,7 @@ class CustomerProfile {
     required this.uid,
     required this.name,
     required this.address,
+    required this.zipCode,
     required this.phone,
     this.email,
   });
@@ -17,6 +19,7 @@ class CustomerProfile {
     return {
       'name': name,
       'address': address,
+      'zipCode': zipCode,
       'phone': phone,
       'email': email,
     };
@@ -27,6 +30,7 @@ class CustomerProfile {
       uid: uid,
       name: map['name'] as String,
       address: map['address'] as String,
+      zipCode: map['zipCode'] as String? ?? '',
       phone: map['phone'] as String,
       email: map['email'] as String?,
     );

@@ -15,6 +15,7 @@ class SubscriptionDetailScreen extends StatefulWidget {
 
 class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
   bool _cancelling = false;
+  bool _pauseBusy = false;
 
   String _formatDate(DateTime d) {
     const months = [
@@ -22,6 +23,42 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
     return '${d.day} ${months[d.month - 1]} ${d.year}';
+  }
+
+  Future<void> _pickPauseAndSave() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: today,
+      lastDate: today.add(const Duration(days: 90)),
+      helpText: 'Pause delivery (max $kMaxPauseDays days)',
+      saveText: 'Pause',
+    );
+    if (range == null || !mounted) return;
+
+    setState(() => _pauseBusy = true);
+    final error = await context
+        .read<AppState>()
+        .pauseSubscription(widget.subscription.id, range.start, range.end);
+    if (!mounted) return;
+    setState(() => _pauseBusy = false);
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(error ??
+          'Delivery paused from ${_formatDate(range.start)} to ${_formatDate(range.end)}. '
+              'It resumes automatically after that.'),
+    ));
+  }
+
+  Future<void> _resumeNow() async {
+    setState(() => _pauseBusy = true);
+    await context.read<AppState>().resumeSubscription(widget.subscription.id);
+    if (!mounted) return;
+    setState(() => _pauseBusy = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Pause removed - deliveries will continue as scheduled.')),
+    );
   }
 
   Future<void> _confirmAndCancel() async {
@@ -74,6 +111,13 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
       orElse: () => widget.subscription,
     );
     final isActive = current.status == SubscriptionStatus.active;
+    final isPending = current.status == SubscriptionStatus.pendingApproval;
+    final isPaused = isActive && current.isPausedNow;
+    final hasPause = isActive && current.hasPauseScheduledOrActive;
+    final statusLabel =
+        isPending ? 'Pending Approval' : (isPaused ? 'Paused' : (isActive ? 'Active' : 'Cancelled'));
+    final statusColor =
+        isPending ? Colors.orange : (isPaused ? Colors.blue : (isActive ? Colors.green : Colors.grey));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Subscription Details')),
@@ -89,15 +133,35 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
                 ),
               ),
               Chip(
-                label: Text(isActive ? 'Active' : 'Cancelled'),
-                backgroundColor: isActive ? Colors.green[100] : Colors.grey[300],
-                labelStyle: TextStyle(
-                  color: isActive ? Colors.green[800] : Colors.grey[700],
-                  fontWeight: FontWeight.bold,
-                ),
+                label: Text(statusLabel),
+                backgroundColor: statusColor.withOpacity(0.15),
+                labelStyle: TextStyle(color: statusColor.shade800, fontWeight: FontWeight.bold),
               ),
             ],
           ),
+          if (current.pendingNewPrice != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.blue[700], size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'A price change to ${formatInr(current.pendingNewPrice!)}/copy is awaiting your response. Check Notifications.',
+                        style: TextStyle(color: Colors.blue[900], fontSize: 12.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           const Divider(height: 32),
           _DetailRow(icon: Icons.calendar_today, label: 'Delivery days', value: current.weekdaysLabel),
           _DetailRow(
@@ -114,11 +178,50 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
           ),
           _DetailRow(
             icon: Icons.currency_rupee,
-            label: 'Monthly cost',
+            label: 'Paper charges (monthly est.)',
             value: formatInr(current.monthlyPrice),
           ),
           const SizedBox(height: 32),
-          if (isActive)
+          if (hasPause) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.pause_circle_outline, color: Colors.blue[700], size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${isPaused ? 'Paused' : 'Pause scheduled'}: '
+                      '${_formatDate(current.pausedFrom!)} - ${_formatDate(current.pausedUntil!)}. '
+                      'Delivery resumes automatically after that.',
+                      style: TextStyle(color: Colors.blue[900], fontSize: 12.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _pauseBusy ? null : _resumeNow,
+              icon: const Icon(Icons.play_circle_outline),
+              label: Text(isPaused ? 'Resume Delivery Now' : 'Remove Scheduled Pause'),
+              style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(16)),
+            ),
+            const SizedBox(height: 12),
+          ] else if (isActive) ...[
+            OutlinedButton.icon(
+              onPressed: _pauseBusy ? null : _pickPauseAndSave,
+              icon: const Icon(Icons.pause_circle_outline),
+              label: const Text('Pause Delivery (up to 1 month)'),
+              style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(16)),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (isActive || isPending)
             FilledButton.icon(
               onPressed: _cancelling ? null : _confirmAndCancel,
               icon: _cancelling
@@ -128,7 +231,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
                   : const Icon(Icons.cancel_outlined),
-              label: Text(_cancelling ? 'Cancelling...' : 'Discontinue Subscription'),
+              label: Text(_cancelling
+                  ? 'Cancelling...'
+                  : (isPending ? 'Withdraw Request' : 'Discontinue Subscription')),
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.red,
                 padding: const EdgeInsets.all(16),

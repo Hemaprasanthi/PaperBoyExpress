@@ -59,11 +59,14 @@ class _SelectNewspaperScreenState extends State<SelectNewspaperScreen> {
   @override
   void initState() {
     super.initState();
-    // Pre-fill address from the customer's saved profile, if they have one.
+    // Pre-fill address and zip code from the customer's saved profile.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final profile = context.read<AppState>().currentCustomerProfile;
-      if (profile != null && _addressController.text.isEmpty) {
-        setState(() => _addressController.text = profile.address);
+      if (profile != null) {
+        setState(() {
+          if (_addressController.text.isEmpty) _addressController.text = profile.address;
+          if (_zipController.text.isEmpty) _zipController.text = profile.zipCode;
+        });
       }
     });
   }
@@ -86,7 +89,7 @@ class _SelectNewspaperScreenState extends State<SelectNewspaperScreen> {
               onChanged: (v) => setState(() => _selected = v),
               title: Text(n.name),
               subtitle: Text(
-                '${formatInr(context.watch<AppState>().basePriceFor(n.id))} / copy',
+                '${formatInr(context.watch<AppState>().priceFor(n.id, zip: _zipController.text.trim().isEmpty ? null : _zipController.text.trim()))} / copy',
               ),
               dense: true,
             ),
@@ -219,7 +222,7 @@ class _SelectNewspaperScreenState extends State<SelectNewspaperScreen> {
                   }
                 : null,
             style: FilledButton.styleFrom(padding: const EdgeInsets.all(16)),
-            child: const Text('Continue to Payment'),
+            child: const Text('Continue'),
           ),
         ],
       ),

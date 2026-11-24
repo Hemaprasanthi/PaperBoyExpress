@@ -14,6 +14,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _addressController = TextEditingController();
+  final _zipController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -38,6 +39,7 @@ class _SignupScreenState extends State<SignupScreen> {
     final error = await context.read<AppState>().signUp(
           name: _nameController.text,
           address: _addressController.text,
+          zipCode: _zipController.text,
           phone: _phoneController.text,
           email: _emailController.text,
           password: _passwordController.text,
@@ -93,6 +95,18 @@ class _SignupScreenState extends State<SignupScreen> {
                       ),
                       validator: (v) =>
                           (v == null || v.trim().isEmpty) ? 'Address is required' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _zipController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Zip code',
+                        prefixIcon: Icon(Icons.pin_drop_outlined),
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'Zip code is required' : null,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(

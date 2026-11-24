@@ -8,11 +8,14 @@ class Payment {
   final int copiesPerDelivery;
   final DateTime periodStart;
   final DateTime periodEnd;
-  final double amount;
+  final double paperCharge;
+  final double deliveryCharge;
+  final double gstAmount;
+  final double totalAmount;
   final PaymentStatus status;
   final DateTime createdAt;
   final DateTime? paidAt;
-  final String method; // e.g. "PhonePe" or "Skipped (Test Mode)"
+  final String? method; // e.g. "PhonePe" or "Skipped (Test Mode)" - null until paid
 
   const Payment({
     required this.id,
@@ -22,11 +25,14 @@ class Payment {
     required this.copiesPerDelivery,
     required this.periodStart,
     required this.periodEnd,
-    required this.amount,
+    required this.paperCharge,
+    required this.deliveryCharge,
+    required this.gstAmount,
+    required this.totalAmount,
     required this.status,
     required this.createdAt,
     this.paidAt,
-    required this.method,
+    this.method,
   });
 
   Map<String, dynamic> toMap() {
@@ -37,7 +43,10 @@ class Payment {
       'copiesPerDelivery': copiesPerDelivery,
       'periodStart': periodStart.toIso8601String(),
       'periodEnd': periodEnd.toIso8601String(),
-      'amount': amount,
+      'paperCharge': paperCharge,
+      'deliveryCharge': deliveryCharge,
+      'gstAmount': gstAmount,
+      'totalAmount': totalAmount,
       'status': status.name,
       'createdAt': createdAt.toIso8601String(),
       'paidAt': paidAt?.toIso8601String(),
@@ -54,14 +63,19 @@ class Payment {
       copiesPerDelivery: map['copiesPerDelivery'] as int,
       periodStart: DateTime.parse(map['periodStart'] as String),
       periodEnd: DateTime.parse(map['periodEnd'] as String),
-      amount: (map['amount'] as num).toDouble(),
+      paperCharge: (map['paperCharge'] as num?)?.toDouble() ?? 0,
+      deliveryCharge: (map['deliveryCharge'] as num?)?.toDouble() ?? 0,
+      gstAmount: (map['gstAmount'] as num?)?.toDouble() ?? 0,
+      totalAmount: (map['totalAmount'] as num?)?.toDouble() ??
+          (map['amount'] as num?)?.toDouble() ?? // fallback for older docs
+          0,
       status: PaymentStatus.values.firstWhere(
         (s) => s.name == map['status'],
         orElse: () => PaymentStatus.pending,
       ),
       createdAt: DateTime.parse(map['createdAt'] as String),
       paidAt: map['paidAt'] != null ? DateTime.parse(map['paidAt'] as String) : null,
-      method: map['method'] as String? ?? 'PhonePe',
+      method: map['method'] as String?,
     );
   }
 }

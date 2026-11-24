@@ -88,6 +88,16 @@ class _AdminSubscriptionEditScreenState extends State<AdminSubscriptionEditScree
     Navigator.of(context).pop();
   }
 
+  Future<void> _approve() async {
+    setState(() => _saving = true);
+    await context.read<AppState>().approveSubscription(widget.subscription.id);
+    if (!mounted) return;
+    setState(() => _saving = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Subscription approved - customer notified')),
+    );
+  }
+
   Future<void> _toggleStatus(SubscriptionStatus current) async {
     final appState = context.read<AppState>();
     if (current == SubscriptionStatus.active) {
@@ -127,6 +137,9 @@ class _AdminSubscriptionEditScreenState extends State<AdminSubscriptionEditScree
       orElse: () => widget.subscription,
     );
     final isActive = current.status == SubscriptionStatus.active;
+    final isPending = current.status == SubscriptionStatus.pendingApproval;
+    final statusLabel = isPending ? 'Pending Approval' : (isActive ? 'Active' : 'Cancelled');
+    final statusColor = isPending ? Colors.orange : (isActive ? Colors.green : Colors.grey);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Edit Subscription')),
@@ -137,13 +150,13 @@ class _AdminSubscriptionEditScreenState extends State<AdminSubscriptionEditScree
             children: [
               Expanded(
                 child: Text(
-                  '${current.customerName ?? current.customerUsername}',
+                  current.customerName ?? current.customerUsername,
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
               Chip(
-                label: Text(isActive ? 'Active' : 'Cancelled'),
-                backgroundColor: isActive ? Colors.green[100] : Colors.grey[300],
+                label: Text(statusLabel),
+                backgroundColor: statusColor.withOpacity(0.15),
               ),
             ],
           ),
@@ -247,15 +260,26 @@ class _AdminSubscriptionEditScreenState extends State<AdminSubscriptionEditScree
             style: FilledButton.styleFrom(padding: const EdgeInsets.all(16)),
           ),
           const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: () => _toggleStatus(current.status),
-            icon: Icon(isActive ? Icons.cancel_outlined : Icons.replay),
-            label: Text(isActive ? 'Cancel Subscription' : 'Reactivate Subscription'),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.all(16),
-              foregroundColor: isActive ? Colors.red : Colors.green[700],
+          if (isPending)
+            FilledButton.icon(
+              onPressed: _saving ? null : _approve,
+              icon: const Icon(Icons.check_circle_outline),
+              label: const Text('Approve Subscription'),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.green[700],
+                padding: const EdgeInsets.all(16),
+              ),
+            )
+          else
+            OutlinedButton.icon(
+              onPressed: () => _toggleStatus(current.status),
+              icon: Icon(isActive ? Icons.cancel_outlined : Icons.replay),
+              label: Text(isActive ? 'Cancel Subscription' : 'Reactivate Subscription'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.all(16),
+                foregroundColor: isActive ? Colors.red : Colors.green[700],
+              ),
             ),
-          ),
         ],
       ),
     );

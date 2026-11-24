@@ -14,6 +14,10 @@ class _PricingScreenState extends State<PricingScreen> {
   final _zipController = TextEditingController();
   String? _selectedNewspaperId;
   final _overridePriceController = TextEditingController();
+  final _deliveryZipController = TextEditingController();
+  final _deliveryChargeController = TextEditingController();
+  late TextEditingController _gstController;
+  bool _gstInitialized = false;
 
   Future<void> _editBasePrice(BuildContext context, String newspaperId, double current) async {
     final controller = TextEditingController(text: current.toStringAsFixed(2));
@@ -59,10 +63,29 @@ class _PricingScreenState extends State<PricingScreen> {
     setState(() => _selectedNewspaperId = null);
   }
 
+  Future<void> _addDeliveryCharge() async {
+    final zip = _deliveryZipController.text.trim();
+    final charge = double.tryParse(_deliveryChargeController.text.trim());
+    if (zip.isEmpty || charge == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a zip code and a valid charge')),
+      );
+      return;
+    }
+    await context.read<AppState>().setDeliveryCharge(zip, charge);
+    _deliveryZipController.clear();
+    _deliveryChargeController.clear();
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final newspapers = appState.newspapers;
+
+    if (!_gstInitialized) {
+      _gstController = TextEditingController(text: appState.gstPercent.toStringAsFixed(0));
+      _gstInitialized = true;
+    }
 
     // Collect all zip overrides across every newspaper, grouped by zip.
     final Map<String, List<MapEntry<String, double>>> byZip = {};
@@ -200,6 +223,112 @@ class _PricingScreenState extends State<PricingScreen> {
               ),
             );
           }),
+        const Divider(height: 40),
+        const Text('Delivery charges by zip', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        const SizedBox(height: 4),
+        Text(
+          'A flat delivery charge added per zip code, on top of paper charges.',
+          style: TextStyle(color: Colors.grey[600], fontSize: 13),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _deliveryZipController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Zip code',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _deliveryChargeController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Charge',
+                      prefixText: '₹ ',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filled(onPressed: _addDeliveryCharge, icon: const Icon(Icons.add)),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (appState.allDeliveryCharges.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text('No delivery charges set yet.', style: TextStyle(color: Colors.grey[600])),
+          )
+        else
+          ...appState.allDeliveryCharges.entries.map((e) => Card(
+                child: ListTile(
+                  title: Text('Zip: ${e.key}'),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(formatInr(e.value), style: const TextStyle(fontWeight: FontWeight.bold)),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, size: 20),
+                        onPressed: () => context.read<AppState>().removeDeliveryCharge(e.key),
+                      ),
+                    ],
+                  ),
+                ),
+              )),
+        const Divider(height: 40),
+        const Text('GST', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        const SizedBox(height: 4),
+        Text(
+          'Applied on top of paper + delivery charges for every payment.',
+          style: TextStyle(color: Colors.grey[600], fontSize: 13),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _gstController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'GST percentage',
+                      suffixText: '%',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                FilledButton(
+                  onPressed: () {
+                    final v = double.tryParse(_gstController.text.trim());
+                    if (v != null && v >= 0) {
+                      context.read<AppState>().setGstPercent(v);
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(const SnackBar(content: Text('GST updated')));
+                    }
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }

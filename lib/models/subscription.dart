@@ -11,7 +11,12 @@ const Map<int, String> kWeekdayLabels = {
   DateTime.sunday: 'Sun',
 };
 
-enum SubscriptionStatus { active, cancelled }
+enum SubscriptionStatus { pendingApproval, active, cancelled }
+
+/// Longest pause a customer can schedule, counting both the first and last day.
+const int kMaxPauseDays = 30;
+
+DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
 class Subscription {
   final String id;
@@ -28,6 +33,9 @@ class Subscription {
   final SubscriptionStatus status;
   final String? zipCode; // customer's zip at signup, used to look up pricing
   final double pricePerCopyOverride; // price locked in at signup time; -1 means "use newspaper.pricePerCopy" (legacy docs)
+  final double? pendingNewPrice; // set when admin changes price - awaiting customer accept/decline
+  final DateTime? pausedFrom; // first day with no delivery (date only)
+  final DateTime? pausedUntil; // last day with no delivery (date only); delivery resumes the day after
 
   Subscription({
     required this.id,
@@ -41,13 +49,29 @@ class Subscription {
     required this.startDate,
     this.assignedDeliveryBoy,
     DateTime? createdAt,
-    this.status = SubscriptionStatus.active,
+    this.status = SubscriptionStatus.pendingApproval,
     this.zipCode,
     double? pricePerCopyAtSignup,
+    this.pendingNewPrice,
+    this.pausedFrom,
+    this.pausedUntil,
   })  : createdAt = createdAt ?? DateTime.now(),
         pricePerCopyOverride = pricePerCopyAtSignup ?? -1;
 
   int get frequencyPerWeek => selectedWeekdays.length;
+
+  /// Whether deliveries are skipped on [day] because of a pause.
+  bool isPausedOn(DateTime day) {
+    if (pausedFrom == null || pausedUntil == null) return false;
+    final d = _dateOnly(day);
+    return !d.isBefore(_dateOnly(pausedFrom!)) && !d.isAfter(_dateOnly(pausedUntil!));
+  }
+
+  bool get isPausedNow => isPausedOn(DateTime.now());
+
+  /// True while a pause is running or still scheduled to start; false once it has ended.
+  bool get hasPauseScheduledOrActive =>
+      pausedUntil != null && !_dateOnly(DateTime.now()).isAfter(_dateOnly(pausedUntil!));
 
   /// e.g. "Mon, Wed, Fri"
   String get weekdaysLabel {
@@ -62,7 +86,7 @@ class Subscription {
   double get effectivePricePerCopy =>
       pricePerCopyOverride >= 0 ? pricePerCopyOverride : newspaper.pricePerCopy;
 
-  /// Rough monthly estimate: price * copies * deliveries/week * ~4.33 weeks/month
+  /// Rough monthly estimate for paper charges only (excludes delivery charge and GST).
   double get monthlyPrice => effectivePricePerCopy * copiesPerDelivery * frequencyPerWeek * 4.33;
 
   /// Converts this subscription into a Firestore-friendly map.
@@ -83,6 +107,9 @@ class Subscription {
       'status': status.name,
       'zipCode': zipCode,
       'pricePerCopyAtSignup': pricePerCopyOverride >= 0 ? pricePerCopyOverride : null,
+      'pendingNewPrice': pendingNewPrice,
+      'pausedFrom': pausedFrom?.toIso8601String(),
+      'pausedUntil': pausedUntil?.toIso8601String(),
     };
   }
 
@@ -112,6 +139,9 @@ class Subscription {
       ),
       zipCode: map['zipCode'] as String?,
       pricePerCopyAtSignup: (map['pricePerCopyAtSignup'] as num?)?.toDouble(),
+      pendingNewPrice: (map['pendingNewPrice'] as num?)?.toDouble(),
+      pausedFrom: map['pausedFrom'] != null ? DateTime.parse(map['pausedFrom'] as String) : null,
+      pausedUntil: map['pausedUntil'] != null ? DateTime.parse(map['pausedUntil'] as String) : null,
     );
   }
 }

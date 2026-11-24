@@ -7,6 +7,8 @@ import '../login_screen.dart';
 import 'select_newspaper_screen.dart';
 import 'subscription_detail_screen.dart';
 import 'payments_screen.dart';
+import 'notifications_screen.dart';
+import 'vegetables_screen.dart';
 
 class CustomerHomeScreen extends StatelessWidget {
   const CustomerHomeScreen({super.key});
@@ -25,8 +27,10 @@ class CustomerHomeScreen extends StatelessWidget {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    final unread = appState.unreadNotificationCountFor(appState.currentUser!.username);
+
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: Text(
@@ -35,12 +39,43 @@ class CustomerHomeScreen extends StatelessWidget {
                 : 'My Account',
           ),
           bottom: const TabBar(
+            isScrollable: true,
             tabs: [
               Tab(text: 'Subscriptions', icon: Icon(Icons.newspaper)),
               Tab(text: 'Payments', icon: Icon(Icons.receipt_long_outlined)),
+              Tab(text: 'Fresh Greens', icon: Icon(Icons.eco_outlined)),
             ],
           ),
           actions: [
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.notifications_outlined),
+                  tooltip: 'Notifications',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                    );
+                  },
+                ),
+                if (unread > 0)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                      child: Text(
+                        '$unread',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white, fontSize: 10),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             IconButton(
               icon: const Icon(Icons.logout),
               tooltip: 'Sign out',
@@ -59,6 +94,7 @@ class CustomerHomeScreen extends StatelessWidget {
           children: [
             _SubscriptionsTab(),
             PaymentsScreen(),
+            VegetablesScreen(),
           ],
         ),
         floatingActionButton: FloatingActionButton.extended(
@@ -115,6 +151,16 @@ class _SubscriptionsTab extends StatelessWidget {
       itemBuilder: (context, index) {
         final s = subs[index];
         final isActive = s.status == SubscriptionStatus.active;
+        final isPending = s.status == SubscriptionStatus.pendingApproval;
+        final isPaused = isActive && s.isPausedNow;
+        final statusLabel =
+            isPending ? 'Pending Approval' : (isPaused ? 'Paused' : (isActive ? 'Active' : 'Cancelled'));
+        final badgeBg = isPending
+            ? Colors.orange[50]
+            : (isPaused ? Colors.blue[50] : (isActive ? Colors.green[50] : Colors.grey[200]));
+        final badgeFg = isPending
+            ? Colors.orange[700]
+            : (isPaused ? Colors.blue[700] : (isActive ? Colors.green[700] : Colors.grey[700]));
         return Card(
           margin: const EdgeInsets.only(bottom: 10),
           elevation: 0,
@@ -142,17 +188,10 @@ class _SubscriptionsTab extends StatelessWidget {
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: isActive ? Colors.green[50] : Colors.grey[200],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(12)),
                   child: Text(
-                    isActive ? 'Active' : 'Cancelled',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: isActive ? Colors.green[700] : Colors.grey[700],
-                    ),
+                    statusLabel,
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: badgeFg),
                   ),
                 ),
               ],

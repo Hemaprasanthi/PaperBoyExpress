@@ -28,14 +28,7 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
-  bool _processing = false;
-
-  static const _phonepePurple = Color(0xFF5F259F);
-
-  double get _monthlyPrice {
-    final price = context.read<AppState>().priceFor(widget.newspaper.id, zip: widget.zipCode);
-    return price * widget.copiesPerDelivery * widget.selectedWeekdays.length * 4.33;
-  }
+  bool _submitting = false;
 
   String get _weekdaysLabel {
     final sorted = [...widget.selectedWeekdays]..sort();
@@ -50,13 +43,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return '${d.day} ${months[d.month - 1]} ${d.year}';
   }
 
-  Future<void> _completeOrder({required String method, required Duration delay}) async {
-    setState(() => _processing = true);
-    if (delay > Duration.zero) {
-      await Future.delayed(delay);
-    }
+  ({double paper, double delivery, double gst, double total}) _breakdown(AppState appState) {
+    final price = appState.priceFor(widget.newspaper.id, zip: widget.zipCode);
+    final paper = price * widget.copiesPerDelivery * widget.selectedWeekdays.length * 4.33;
+    final delivery = appState.deliveryChargeForZip(widget.zipCode);
+    final gst = (paper + delivery) * (appState.gstPercent / 100);
+    return (paper: paper, delivery: delivery, gst: gst, total: paper + delivery + gst);
+  }
 
-    if (!mounted) return;
+  Future<void> _submit() async {
+    setState(() => _submitting = true);
 
     await context.read<AppState>().createSubscription(
           newspaper: widget.newspaper,
@@ -65,20 +61,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           address: widget.address,
           startDate: widget.startDate,
           zipCode: widget.zipCode,
-          paymentMethod: method,
         );
 
-    setState(() => _processing = false);
+    if (!mounted) return;
+    setState(() => _submitting = false);
 
     await showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        icon: Icon(Icons.check_circle, color: Colors.green[600], size: 48),
-        title: const Text('Subscription confirmed'),
-        content: Text(
-          'You are now subscribed to ${widget.newspaper.name} '
-          '($_weekdaysLabel, ${widget.copiesPerDelivery} copy each time), '
-          'starting ${_formatDate(widget.startDate)}.',
+        icon: Icon(Icons.hourglass_top, color: Colors.orange[600], size: 48),
+        title: const Text('Request submitted'),
+        content: const Text(
+          'Your subscription request has been sent for approval. '
+          'We\'ll notify you as soon as it\'s accepted - your dashboard will '
+          'update automatically once it is.',
           textAlign: TextAlign.center,
         ),
         actionsAlignment: MainAxisAlignment.center,
@@ -97,9 +93,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final b = _breakdown(appState);
+
     return Scaffold(
       backgroundColor: const Color(0xFFF6F3FA),
-      appBar: AppBar(title: const Text('Payment')),
+      appBar: AppBar(title: const Text('Confirm Subscription')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -116,10 +115,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: _phonepePurple.withOpacity(0.1),
+                          color: Colors.deepPurple.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(Icons.newspaper, color: _phonepePurple),
+                        child: const Icon(Icons.newspaper, color: Colors.deepPurple),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -131,111 +130,85 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  _SummaryRow(label: 'Delivery days', value: _weekdaysLabel),
-                  _SummaryRow(label: 'Copies per delivery', value: '${widget.copiesPerDelivery}'),
-                  _SummaryRow(label: 'Start date', value: _formatDate(widget.startDate)),
-                  _SummaryRow(label: 'Address', value: widget.address),
-                  const Divider(height: 28),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Monthly total',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                      Text(
-                        formatInr(_monthlyPrice),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 20,
-                          color: _phonepePurple,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          Card(
-            elevation: 0,
-            color: _phonepePurple,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.account_balance_wallet, color: Colors.white),
-                      SizedBox(width: 10),
-                      Text(
-                        'Pay via PhonePe',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'UPI · Secure checkout',
-                    style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: _processing
-                          ? null
-                          : () => _completeOrder(
-                                method: 'PhonePe',
-                                delay: const Duration(milliseconds: 1200),
-                              ),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: _phonepePurple,
-                        padding: const EdgeInsets.all(16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: _processing
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: _phonepePurple),
-                            )
-                          : Text(
-                              'Pay ${formatInr(_monthlyPrice)}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                    ),
-                  ),
+                  _Row(label: 'Delivery days', value: _weekdaysLabel),
+                  _Row(label: 'Copies per delivery', value: '${widget.copiesPerDelivery}'),
+                  _Row(label: 'Start date', value: _formatDate(widget.startDate)),
+                  _Row(label: 'Address', value: widget.address),
+                  if (widget.zipCode != null) _Row(label: 'Zip code', value: widget.zipCode!),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 16),
-          Center(
-            child: TextButton.icon(
-              onPressed: _processing
-                  ? null
-                  : () => _completeOrder(
-                        method: 'Skipped (Test Mode)',
-                        delay: Duration.zero,
+          Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('First month\'s estimated bill',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  const SizedBox(height: 12),
+                  _Row(label: 'Paper charges', value: formatInr(b.paper)),
+                  _Row(label: 'Delivery charges', value: formatInr(b.delivery)),
+                  _Row(
+                    label: 'GST (${appState.gstPercent.toStringAsFixed(0)}%)',
+                    value: formatInr(b.gst),
+                  ),
+                  const Divider(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Total', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      Text(
+                        formatInr(b.total),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                          color: Colors.deepPurple,
+                        ),
                       ),
-              icon: const Icon(Icons.fast_forward, size: 18),
-              label: const Text('Skip Payment (Test Mode)'),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 8),
-          Center(
-            child: Text(
-              'Real PhonePe payments aren\'t wired up yet — either button marks this as paid.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey[500], fontSize: 12),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.orange[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.orange[100]!),
             ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.orange[800], size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'No payment is collected now. You\'ll be billed at the end of the month '
+                    'from the Payments tab, once your subscription is approved and active.',
+                    style: TextStyle(color: Colors.orange[900], fontSize: 12.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          FilledButton(
+            onPressed: _submitting ? null : _submit,
+            style: FilledButton.styleFrom(padding: const EdgeInsets.all(16)),
+            child: _submitting
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Text('Submit for Approval'),
           ),
         ],
       ),
@@ -243,11 +216,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 }
 
-class _SummaryRow extends StatelessWidget {
+class _Row extends StatelessWidget {
   final String label;
   final String value;
 
-  const _SummaryRow({required this.label, required this.value});
+  const _Row({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -257,7 +230,7 @@ class _SummaryRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 130,
+            width: 140,
             child: Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
           ),
           Expanded(child: Text(value, style: const TextStyle(fontSize: 13))),

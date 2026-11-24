@@ -69,6 +69,16 @@ class _AllSubscriptionsTab extends StatelessWidget {
       itemBuilder: (context, index) {
         final s = subs[index];
         final isActive = s.status == SubscriptionStatus.active;
+        final isPending = s.status == SubscriptionStatus.pendingApproval;
+        final isPaused = isActive && s.isPausedNow;
+        final statusLabel =
+            isPending ? 'Pending' : (isPaused ? 'Paused' : (isActive ? 'Active' : 'Cancelled'));
+        final badgeBg = isPending
+            ? Colors.orange[100]
+            : (isPaused ? Colors.blue[100] : (isActive ? Colors.green[100] : Colors.grey[300]));
+        final badgeFg = isPending
+            ? Colors.orange[800]
+            : (isPaused ? Colors.blue[800] : (isActive ? Colors.green[800] : Colors.grey[700]));
         return Card(
           child: ListTile(
             onTap: () {
@@ -86,17 +96,10 @@ class _AllSubscriptionsTab extends StatelessWidget {
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: isActive ? Colors.green[100] : Colors.grey[300],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(12)),
                   child: Text(
-                    isActive ? 'Active' : 'Cancelled',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: isActive ? Colors.green[800] : Colors.grey[700],
-                    ),
+                    statusLabel,
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: badgeFg),
                   ),
                 ),
               ],
@@ -105,7 +108,8 @@ class _AllSubscriptionsTab extends StatelessWidget {
               '${s.customerPhone != null ? "${s.customerPhone}\n" : ""}'
               '${s.copiesPerDelivery}x copy · ${s.weekdaysLabel}\n'
               'Starts ${s.startDate.day}/${s.startDate.month}/${s.startDate.year} · ${s.address}\n'
-              'Delivery: ${s.assignedDeliveryBoy ?? "Unassigned"}',
+              'Delivery: ${s.assignedDeliveryBoy ?? "Unassigned"}'
+              '${s.status == SubscriptionStatus.active && s.hasPauseScheduledOrActive ? "\nPause: ${s.pausedFrom!.day}/${s.pausedFrom!.month}/${s.pausedFrom!.year} - ${s.pausedUntil!.day}/${s.pausedUntil!.month}/${s.pausedUntil!.year}" : ""}',
             ),
             isThreeLine: true,
             trailing: Column(
