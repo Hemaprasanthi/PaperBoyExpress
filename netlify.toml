@@ -1,0 +1,10 @@
+[build]
+  # Netlify has no Flutter SDK, so fetch it, then build the web app.
+  command = "git clone https://github.com/flutter/flutter.git --depth 1 -b stable $HOME/flutter && $HOME/flutter/bin/flutter config --no-analytics --enable-web && $HOME/flutter/bin/flutter build web --release"
+  publish = "build/web"
+
+# Serve index.html for any path so Flutter's client-side routing works on refresh.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
