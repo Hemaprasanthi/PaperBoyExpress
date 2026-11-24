@@ -43,7 +43,7 @@ class CustomerHomeScreen extends StatelessWidget {
           bottom: const TabBar(
             isScrollable: true,
             tabs: [
-              Tab(text: 'Subscriptions', icon: Icon(Icons.newspaper)),
+              Tab(text: 'Newspaper Subscriptions', icon: Icon(Icons.newspaper)),
               Tab(text: 'Receipts', icon: Icon(Icons.receipt_long_outlined)),
               Tab(text: 'Greens & Veg', icon: Icon(Icons.eco_outlined)),
             ],
@@ -88,15 +88,6 @@ class CustomerHomeScreen extends StatelessWidget {
             VegetablesScreen(),
           ],
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SelectNewspaperScreen()),
-            );
-          },
-          icon: const Icon(Icons.add),
-          label: const Text('Subscribe'),
-        ),
       ),
     );
   }
@@ -107,6 +98,24 @@ class _SubscriptionsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The Subscribe button lives here so it only shows on the newspaper tab.
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'subscribe_newspaper',
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SelectNewspaperScreen()),
+          );
+        },
+        icon: const Icon(Icons.add),
+        label: const Text('Subscribe'),
+      ),
+      body: _buildList(context),
+    );
+  }
+
+  Widget _buildList(BuildContext context) {
     final appState = context.watch<AppState>();
     final username = appState.currentUser!.username;
     final subs = appState.subscriptionsForCustomer(username);
