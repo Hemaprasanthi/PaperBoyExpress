@@ -1,5 +1,6 @@
 enum PaymentStatus { pending, paid }
 
+/// A newspaper subscription payment. Once paid it doubles as the receipt.
 class Payment {
   final String id;
   final String subscriptionId;
@@ -8,6 +9,7 @@ class Payment {
   final int copiesPerDelivery;
   final DateTime periodStart;
   final DateTime periodEnd;
+  final int? totalDeliveries;
   final double paperCharge;
   final double deliveryCharge;
   final double gstAmount;
@@ -15,7 +17,9 @@ class Payment {
   final PaymentStatus status;
   final DateTime createdAt;
   final DateTime? paidAt;
-  final String? method; // e.g. "PhonePe" or "Skipped (Test Mode)" - null until paid
+  final String? method; // "UPI" once paid
+  final String? receiptNo;
+  final String? transactionRef;
 
   const Payment({
     required this.id,
@@ -25,6 +29,7 @@ class Payment {
     required this.copiesPerDelivery,
     required this.periodStart,
     required this.periodEnd,
+    this.totalDeliveries,
     required this.paperCharge,
     required this.deliveryCharge,
     required this.gstAmount,
@@ -33,6 +38,8 @@ class Payment {
     required this.createdAt,
     this.paidAt,
     this.method,
+    this.receiptNo,
+    this.transactionRef,
   });
 
   Map<String, dynamic> toMap() {
@@ -43,6 +50,7 @@ class Payment {
       'copiesPerDelivery': copiesPerDelivery,
       'periodStart': periodStart.toIso8601String(),
       'periodEnd': periodEnd.toIso8601String(),
+      'totalDeliveries': totalDeliveries,
       'paperCharge': paperCharge,
       'deliveryCharge': deliveryCharge,
       'gstAmount': gstAmount,
@@ -51,6 +59,8 @@ class Payment {
       'createdAt': createdAt.toIso8601String(),
       'paidAt': paidAt?.toIso8601String(),
       'method': method,
+      'receiptNo': receiptNo,
+      'transactionRef': transactionRef,
     };
   }
 
@@ -63,6 +73,7 @@ class Payment {
       copiesPerDelivery: map['copiesPerDelivery'] as int,
       periodStart: DateTime.parse(map['periodStart'] as String),
       periodEnd: DateTime.parse(map['periodEnd'] as String),
+      totalDeliveries: map['totalDeliveries'] as int?,
       paperCharge: (map['paperCharge'] as num?)?.toDouble() ?? 0,
       deliveryCharge: (map['deliveryCharge'] as num?)?.toDouble() ?? 0,
       gstAmount: (map['gstAmount'] as num?)?.toDouble() ?? 0,
@@ -76,6 +87,8 @@ class Payment {
       createdAt: DateTime.parse(map['createdAt'] as String),
       paidAt: map['paidAt'] != null ? DateTime.parse(map['paidAt'] as String) : null,
       method: map['method'] as String?,
+      receiptNo: map['receiptNo'] as String?,
+      transactionRef: map['transactionRef'] as String?,
     );
   }
 }

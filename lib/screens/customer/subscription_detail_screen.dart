@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/subscription.dart';
 import '../../state/app_state.dart';
+import '../../utils/app_constants.dart';
 import '../../utils/currency.dart';
+import '../../widgets/status_badge.dart';
 
 class SubscriptionDetailScreen extends StatefulWidget {
   final Subscription subscription;
@@ -17,21 +19,18 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
   bool _cancelling = false;
   bool _pauseBusy = false;
 
-  String _formatDate(DateTime d) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${d.day} ${months[d.month - 1]} ${d.year}';
-  }
+  Future<void> _pickPauseAndSave(Subscription current) async {
+    final today = dateOnly(DateTime.now());
+    var lastDate = today.add(const Duration(days: 90));
+    if (current.endDate != null && dateOnly(current.endDate!).isBefore(lastDate)) {
+      lastDate = dateOnly(current.endDate!);
+    }
+    if (lastDate.isBefore(today)) return;
 
-  Future<void> _pickPauseAndSave() async {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
     final range = await showDateRangePicker(
       context: context,
       firstDate: today,
-      lastDate: today.add(const Duration(days: 90)),
+      lastDate: lastDate,
       helpText: 'Pause delivery (max $kMaxPauseDays days)',
       saveText: 'Pause',
     );
@@ -46,7 +45,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(error ??
-          'Delivery paused from ${_formatDate(range.start)} to ${_formatDate(range.end)}. '
+          'Delivery paused from ${formatDate(range.start)} to ${formatDate(range.end)}. '
               'It resumes automatically after that.'),
     ));
   }
@@ -67,9 +66,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
       builder: (_) => AlertDialog(
         title: const Text('Discontinue subscription?'),
         content: const Text(
-          "You've already paid for this month, so delivery will continue as "
-          "normal until the end of the current billing month. After that, "
-          "it will be discontinued and you won't be charged again.\n\n"
+          'Deliveries will stop. Amounts you have already paid aren\'t refunded '
+          'automatically - please contact support if you need help with that.\n\n'
           'Are you sure you want to cancel?',
         ),
         actions: [
@@ -86,7 +84,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
       ),
     );
 
-    if (confirmed != true) return;
+    if (confirmed != true || !mounted) return;
 
     setState(() => _cancelling = true);
     await context.read<AppState>().cancelSubscription(widget.subscription.id);
@@ -94,9 +92,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
     setState(() => _cancelling = false);
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Subscription will be discontinued after this month ends.'),
-      ),
+      const SnackBar(content: Text('Subscription discontinued.')),
     );
     Navigator.of(context).pop();
   }
@@ -110,14 +106,12 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
       (s) => s.id == widget.subscription.id,
       orElse: () => widget.subscription,
     );
-    final isActive = current.status == SubscriptionStatus.active;
+    final status = current.displayStatus;
+    final isActive = current.status == SubscriptionStatus.active && !current.isExpired;
     final isPending = current.status == SubscriptionStatus.pendingApproval;
-    final isPaused = isActive && current.isPausedNow;
+    final isPaused = status == SubscriptionDisplayStatus.paused;
     final hasPause = isActive && current.hasPauseScheduledOrActive;
-    final statusLabel =
-        isPending ? 'Pending Approval' : (isPaused ? 'Paused' : (isActive ? 'Active' : 'Cancelled'));
-    final statusColor =
-        isPending ? Colors.orange : (isPaused ? Colors.blue : (isActive ? Colors.green : Colors.grey));
+    final statusColor = subscriptionStatusColor(status);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Subscription Details')),
@@ -133,8 +127,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
                 ),
               ),
               Chip(
-                label: Text(statusLabel),
-                backgroundColor: statusColor.withOpacity(0.15),
+                label: Text(status.label),
+                backgroundColor: statusColor.withValues(alpha: 0.15),
                 labelStyle: TextStyle(color: statusColor.shade800, fontWeight: FontWeight.bold),
               ),
             ],
@@ -169,7 +163,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
             label: 'Copies per delivery',
             value: '${current.copiesPerDelivery}',
           ),
-          _DetailRow(icon: Icons.event, label: 'Start date', value: _formatDate(current.startDate)),
+          _DetailRow(icon: Icons.event, label: 'Start date', value: formatDate(current.startDate)),
+          if (current.endDate != null)
+            _DetailRow(icon: Icons.event_busy, label: 'End date', value: formatDate(current.endDate!)),
           _DetailRow(icon: Icons.location_on_outlined, label: 'Delivery address', value: current.address),
           _DetailRow(
             icon: Icons.local_shipping_outlined,
@@ -178,8 +174,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
           ),
           _DetailRow(
             icon: Icons.currency_rupee,
-            label: 'Paper charges (monthly est.)',
-            value: formatInr(current.monthlyPrice),
+            label: current.endDate == null ? 'Paper charges (monthly est.)' : 'Paper charges (prepaid)',
+            value: formatInr(current.periodPrice),
           ),
           const SizedBox(height: 32),
           if (hasPause) ...[
@@ -196,7 +192,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
                   Expanded(
                     child: Text(
                       '${isPaused ? 'Paused' : 'Pause scheduled'}: '
-                      '${_formatDate(current.pausedFrom!)} - ${_formatDate(current.pausedUntil!)}. '
+                      '${formatDate(current.pausedFrom!)} - ${formatDate(current.pausedUntil!)}. '
                       'Delivery resumes automatically after that.',
                       style: TextStyle(color: Colors.blue[900], fontSize: 12.5),
                     ),
@@ -214,7 +210,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
             const SizedBox(height: 12),
           ] else if (isActive) ...[
             OutlinedButton.icon(
-              onPressed: _pauseBusy ? null : _pickPauseAndSave,
+              onPressed: _pauseBusy ? null : () => _pickPauseAndSave(current),
               icon: const Icon(Icons.pause_circle_outline),
               label: const Text('Pause Delivery (up to 1 month)'),
               style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(16)),
@@ -246,14 +242,15 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
                 color: Colors.grey[200],
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.info_outline, color: Colors.grey),
-                  SizedBox(width: 12),
+                  const Icon(Icons.info_outline, color: Colors.grey),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'This subscription has been discontinued. '
-                      'Delivery will stop at the end of the paid month.',
+                      status == SubscriptionDisplayStatus.completed
+                          ? 'This subscription has ended.'
+                          : 'This subscription has been discontinued.',
                     ),
                   ),
                 ],

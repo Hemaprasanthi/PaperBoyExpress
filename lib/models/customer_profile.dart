@@ -6,6 +6,10 @@ class CustomerProfile {
   final String phone;
   final String? email;
 
+  /// The internal Firebase Auth email this account signs in with. It stays fixed
+  /// even if the customer later changes their phone number.
+  final String? authEmail;
+
   const CustomerProfile({
     required this.uid,
     required this.name,
@@ -13,7 +17,10 @@ class CustomerProfile {
     required this.zipCode,
     required this.phone,
     this.email,
+    this.authEmail,
   });
+
+  String get loginEmail => authEmail ?? authEmailForPhone(phone);
 
   Map<String, dynamic> toMap() {
     return {
@@ -22,6 +29,7 @@ class CustomerProfile {
       'zipCode': zipCode,
       'phone': phone,
       'email': email,
+      'authEmail': loginEmail,
     };
   }
 
@@ -33,6 +41,7 @@ class CustomerProfile {
       zipCode: map['zipCode'] as String? ?? '',
       phone: map['phone'] as String,
       email: map['email'] as String?,
+      authEmail: map['authEmail'] as String?,
     );
   }
 }

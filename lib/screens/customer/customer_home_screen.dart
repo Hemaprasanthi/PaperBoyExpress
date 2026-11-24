@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../models/subscription.dart';
 import '../../state/app_state.dart';
+import '../../utils/app_constants.dart';
 import '../../utils/currency.dart';
+import '../../widgets/app_menu.dart';
+import '../../widgets/status_badge.dart';
 import '../login_screen.dart';
 import 'select_newspaper_screen.dart';
 import 'subscription_detail_screen.dart';
-import 'payments_screen.dart';
+import 'receipts_screen.dart';
 import 'notifications_screen.dart';
 import 'vegetables_screen.dart';
 
@@ -42,8 +44,8 @@ class CustomerHomeScreen extends StatelessWidget {
             isScrollable: true,
             tabs: [
               Tab(text: 'Subscriptions', icon: Icon(Icons.newspaper)),
-              Tab(text: 'Payments', icon: Icon(Icons.receipt_long_outlined)),
-              Tab(text: 'Fresh Greens', icon: Icon(Icons.eco_outlined)),
+              Tab(text: 'Receipts', icon: Icon(Icons.receipt_long_outlined)),
+              Tab(text: 'Greens & Veg', icon: Icon(Icons.eco_outlined)),
             ],
           ),
           actions: [
@@ -76,24 +78,13 @@ class CustomerHomeScreen extends StatelessWidget {
                   ),
               ],
             ),
-            IconButton(
-              icon: const Icon(Icons.logout),
-              tooltip: 'Sign out',
-              onPressed: () async {
-                await context.read<AppState>().logout();
-                if (!context.mounted) return;
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  (route) => false,
-                );
-              },
-            ),
+            const AppMenuButton(showAccount: true),
           ],
         ),
         body: const TabBarView(
           children: [
             _SubscriptionsTab(),
-            PaymentsScreen(),
+            ReceiptsScreen(),
             VegetablesScreen(),
           ],
         ),
@@ -146,28 +137,12 @@ class _SubscriptionsTab extends StatelessWidget {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
       itemCount: subs.length,
       itemBuilder: (context, index) {
         final s = subs[index];
-        final isActive = s.status == SubscriptionStatus.active;
-        final isPending = s.status == SubscriptionStatus.pendingApproval;
-        final isPaused = isActive && s.isPausedNow;
-        final statusLabel =
-            isPending ? 'Pending Approval' : (isPaused ? 'Paused' : (isActive ? 'Active' : 'Cancelled'));
-        final badgeBg = isPending
-            ? Colors.orange[50]
-            : (isPaused ? Colors.blue[50] : (isActive ? Colors.green[50] : Colors.grey[200]));
-        final badgeFg = isPending
-            ? Colors.orange[700]
-            : (isPaused ? Colors.blue[700] : (isActive ? Colors.green[700] : Colors.grey[700]));
         return Card(
           margin: const EdgeInsets.only(bottom: 10),
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: Colors.grey.withOpacity(0.15)),
-          ),
           child: ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             onTap: () {
@@ -178,7 +153,7 @@ class _SubscriptionsTab extends StatelessWidget {
               );
             },
             leading: CircleAvatar(
-              backgroundColor: Colors.deepPurple.withOpacity(0.08),
+              backgroundColor: Colors.deepPurple.withValues(alpha: 0.08),
               child: const Icon(Icons.newspaper, color: Colors.deepPurple),
             ),
             title: Row(
@@ -186,19 +161,12 @@ class _SubscriptionsTab extends StatelessWidget {
                 Expanded(
                   child: Text(s.newspaper.name, style: const TextStyle(fontWeight: FontWeight.w600)),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(12)),
-                  child: Text(
-                    statusLabel,
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: badgeFg),
-                  ),
-                ),
+                SubscriptionStatusBadge(subscription: s),
               ],
             ),
             subtitle: Text(
               '${s.copiesPerDelivery}x copy · ${s.weekdaysLabel}\n'
-              'Starts ${s.startDate.day}/${s.startDate.month}/${s.startDate.year} · ${s.address}',
+              '${formatDate(s.startDate)}${s.endDate != null ? ' – ${formatDate(s.endDate!)}' : ''}',
               style: TextStyle(color: Colors.grey[600], fontSize: 12),
             ),
             isThreeLine: true,
@@ -207,7 +175,7 @@ class _SubscriptionsTab extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '${formatInr(s.monthlyPrice)}/mo',
+                  '${formatInr(s.periodPrice)}${s.periodPriceSuffix}',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const Icon(Icons.chevron_right, size: 18, color: Colors.grey),

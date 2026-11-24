@@ -1,89 +1,79 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+import '../../models/payment.dart';
+import '../../state/app_state.dart';
+import '../../utils/app_constants.dart';
+import '../../utils/currency.dart';
 
+/// Every UPI payment across newspapers and greens, newest first.
 class AdminPaymentsTab extends StatelessWidget {
-  const AdminPaymentsTab({Key? key}) : super(key: key);
+  const AdminPaymentsTab({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Payments Management")),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('orders')
-            .orderBy('created_at', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+    final appState = context.watch<AppState>();
+    final customerNames = {for (final c in appState.customers) c.uid: c.name};
 
-          var orders = snapshot.data!.docs;
-
-          if (orders.isEmpty) {
-            return const Center(child: Text("No payments recorded yet."));
-          }
-
-          return ListView.builder(
-            itemCount: orders.length,
-            itemBuilder: (context, index) {
-              var orderData = orders[index].data() as Map<String, dynamic>;
-              String type = orderData['type'] ?? 'Newspaper'; 
-              String zipcode = orderData['zipcode'] ?? 'N/A';
-              double amount = (orderData['total_amount'] as num?)?.toDouble() ?? 0.0;
-              String mode = orderData['payment_mode'] ?? 'PhonePe';
-
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: type == 'Greens' ? Colors.green : Colors.blue,
-                    child: Icon(
-                      type == 'Greens' ? Icons.eco : Icons.newspaper,
-                      color: Colors.white,
-                    ),
-                  ),
-                  title: Text("$type Order - ₹$amount"),
-                  subtitle: Text("Zipcode: $zipcode | Payment Mode: $mode"),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: () {
-                    _showOrderDetailsDialog(context, orderData);
-                  },
-                ),
-              );
-            },
-          );
-        },
-      ),
-    );
-  }
-
-  void _showOrderDetailsDialog(BuildContext context, Map<String, dynamic> orderData) {
-    List items = orderData['items'] ?? [];
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text("${orderData['type']} Order Details"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Zipcode: ${orderData['zipcode']}"),
-            Text("Amount Paid: ₹${orderData['total_amount']}"),
-            Text("Payment Mode: ${orderData['payment_mode']}"),
-            Text("Payment Status: ${orderData['payment_status']}"),
-            const SizedBox(height: 10),
-            const Text("Items Ordered:", style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 5),
-            ...items.map((item) => Text("- ${item['name']} (Qty: ${item['quantity']})")),
-          ],
+    final rows = <({DateTime when, String title, String subtitle, double amount, bool greens})>[
+      for (final Payment p in appState.payments.where((p) => p.status == PaymentStatus.paid))
+        (
+          when: p.paidAt ?? p.createdAt,
+          title: '${customerNames[p.customerUsername] ?? p.customerUsername} · ${p.newspaperName}',
+          subtitle: '${formatDate(p.periodStart)} – ${formatDate(p.periodEnd)}\n'
+              '${p.receiptNo ?? ''} · ${p.method ?? ''} ${p.transactionRef ?? ''}',
+          amount: p.totalAmount,
+          greens: false,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Close"),
+      for (final o in appState.veggieOrders.where((o) => o.paidAt != null))
+        (
+          when: o.paidAt!,
+          title: '${o.customerName ?? o.customerUsername} · Greens & vegetables',
+          subtitle: '${o.itemsSummary}\n'
+              '${o.receiptNo ?? ''} · ${o.paymentMethod ?? ''} ${o.transactionRef ?? ''}',
+          amount: o.totalAmount,
+          greens: true,
+        ),
+    ]..sort((a, b) => b.when.compareTo(a.when));
+
+    if (rows.isEmpty) {
+      return const Center(child: Text('No payments yet.'));
+    }
+
+    final total = rows.fold<double>(0, (sum, r) => sum + r.amount);
+
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        Card(
+          color: Colors.green.withValues(alpha: 0.06),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Total collected (${rows.length} payments)',
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(formatInr(total),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              ],
+            ),
           ),
-        ],
-      ),
+        ),
+        for (final r in rows)
+          Card(
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor: Colors.green[50],
+                child: Icon(r.greens ? Icons.eco : Icons.newspaper, color: Colors.green[700]),
+              ),
+              title: Text(r.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              subtitle: Text('${formatDateTime(r.when)}\n${r.subtitle}',
+                  style: const TextStyle(fontSize: 12)),
+              isThreeLine: true,
+              trailing: Text(formatInr(r.amount), style: const TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ),
+      ],
     );
   }
 }

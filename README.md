@@ -1,35 +1,56 @@
-# Paperboy
+# PaperBoy Express
 
-A newspaper subscription app with three roles: customer, admin, delivery.
+A Flutter app (Firebase Auth + Firestore) for newspaper subscriptions and 15-minute
+greens & vegetable delivery, with three roles: customer, admin and delivery.
 
 ## Demo logins
-All passwords are `password`.
+All passwords are `password`. Customers can also sign up for a real account.
 
-| Username | Role      |
-|----------|-----------|
-| customer | Customer  |
-| admin    | Admin     |
-| delivery | Delivery  |
+| Username | Role     | Notes                                                       |
+|----------|----------|-------------------------------------------------------------|
+| customer | Customer | Demo profile in zip `560102`, so greens & vegetables show up |
+| admin    | Admin    |                                                             |
+| delivery | Delivery |                                                             |
 
-## What's included
-- `lib/models/` — User, Newspaper, Subscription data classes
-- `lib/data/mock_data.dart` — placeholder top-10 English newspapers
-- `lib/state/app_state.dart` — in-memory app state (Provider/ChangeNotifier):
-  login, subscriptions, delivery assignment
-- `lib/screens/login_screen.dart` — shared login for all 3 roles
-- `lib/screens/customer/` — pick newspaper → set frequency/copies/address →
-  mock checkout → subscription created
-- `lib/screens/admin/` — view all subscriptions, assign a delivery boy to each
-- `lib/screens/delivery/` — shows ONLY newspaper name + address for
-  subscriptions assigned to that delivery account
+## What each role can do
 
-## Notes / what's mocked for now
-- Auth is hardcoded (no backend, no persistence). Restarting the app resets
-  everything, including subscriptions.
-- Payment is a fake 1-second delay — no real card processing.
-- Newspaper catalog is a placeholder list of 10 well-known English papers.
-- Only one delivery account exists, but the admin assignment UI already
-  supports multiple delivery boys once you add more to `kUsers`.
+**Customer**
+- Subscribe to a newspaper with delivery days, copies, a start date and an end date.
+  Both dates must be after today. Payment is taken up front by UPI.
+- Pause a subscription for up to 30 days; it resumes automatically.
+- Order greens & vegetables (zip `560102` only), paid by UPI and delivered in ~15 minutes.
+- UPI payment shows a QR code that is valid for 15 minutes, then must be regenerated.
+- **Receipts** tab with separate *Newspapers* and *Greens & Veg* sub tabs.
+- Edit name, address, zip and phone, or delete the account (menu → My account).
+
+**Admin**
+- Subscriptions: see and edit everything, pause/resume, cancel, delete, assign delivery.
+- Assign Delivery: newspaper subscriptions and today's greens orders.
+- Catalog: add, edit, price and delete newspapers and greens/vegetables (and mark out of stock).
+- Pricing: zip-specific prices, delivery charges, GST.
+- Payments, Users (edit or delete a customer) and Issues (reported problems).
+
+**Delivery person**
+- Sees only today's deliveries (what, where, when). Nothing is editable.
+
+**Everyone**: menu → *Report an issue* (support replies within 1 business day, urgent
+contact shown) and *About us*.
+
+## Placeholders to replace before launch
+- `lib/utils/app_constants.dart`: UPI id, payee name and support contact are dummies.
+- UPI payments aren't verified: the "I've completed the payment" button confirms them.
+  Hook up a payment gateway callback in `UpiPaymentScreen`.
+
+## Firestore
+Collections used: `subscriptions`, `payments`, `veggieOrders`, `customers`, `emailIndex`,
+`phoneIndex`, `newspapers`, `produce`, `pricing`, `deliveryCharges`, `settings`,
+`notifications`, `issues`. Your security rules must allow the app to read and write them
+(the admin and delivery logins are not Firebase accounts). The catalog is seeded with
+defaults the first time the app runs.
 
 ## Running it
-See the step-by-step instructions provided alongside this project.
+```
+flutter pub get
+flutter run -d chrome
+flutter test
+```

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../models/newspaper.dart';
 import '../../models/subscription.dart';
 import '../../state/app_state.dart';
+import '../../utils/app_constants.dart';
 import '../../utils/currency.dart';
 import 'checkout_screen.dart';
 
@@ -14,46 +15,69 @@ class SelectNewspaperScreen extends StatefulWidget {
 }
 
 class _SelectNewspaperScreenState extends State<SelectNewspaperScreen> {
-  Newspaper? _selected;
+  String? _selectedId;
   final Set<int> _selectedDays = {}; // DateTime.monday..sunday
   int _copiesPerDelivery = 1;
   DateTime? _startDate;
+  DateTime? _endDate;
   final _addressController = TextEditingController();
   final _zipController = TextEditingController();
 
-  double get _estimatedMonthly {
-    if (_selected == null || _selectedDays.isEmpty) return 0;
-    final appState = context.read<AppState>();
-    final zip = _zipController.text.trim();
-    final price = appState.priceFor(_selected!.id, zip: zip.isEmpty ? null : zip);
-    return price * _copiesPerDelivery * _selectedDays.length * 4.33;
+  DateTime get _tomorrow {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day + 1);
+  }
+
+  String? get _zip => _zipController.text.trim().isEmpty ? null : _zipController.text.trim();
+
+  int get _deliveryCount => (_startDate == null || _endDate == null)
+      ? 0
+      : countDeliveries(_startDate!, _endDate!, _selectedDays);
+
+  double _estimatedPaper(AppState appState) {
+    if (_selectedId == null) return 0;
+    return appState.priceFor(_selectedId!, zip: _zip) * _copiesPerDelivery * _deliveryCount;
   }
 
   bool get _canContinue =>
-      _selected != null &&
+      _selectedId != null &&
       _selectedDays.isNotEmpty &&
       _startDate != null &&
+      _endDate != null &&
+      _deliveryCount > 0 &&
       _addressController.text.trim().isNotEmpty;
 
   Future<void> _pickStartDate() async {
-    final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: _startDate ?? now,
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 365)),
+      initialDate: _startDate ?? _tomorrow,
+      firstDate: _tomorrow,
+      lastDate: _tomorrow.add(const Duration(days: 365)),
+      helpText: 'Start date (from tomorrow)',
     );
-    if (picked != null) {
-      setState(() => _startDate = picked);
-    }
+    if (picked == null) return;
+    setState(() {
+      _startDate = picked;
+      if (_endDate != null && _endDate!.isBefore(picked)) _endDate = null;
+    });
   }
 
-  String _formatDate(DateTime d) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${d.day} ${months[d.month - 1]} ${d.year}';
+  Future<void> _pickEndDate() async {
+    final start = _startDate;
+    if (start == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Choose a start date first')),
+      );
+      return;
+    }
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _endDate ?? start.add(const Duration(days: 29)),
+      firstDate: start,
+      lastDate: start.add(const Duration(days: 730)),
+      helpText: 'End date',
+    );
+    if (picked != null) setState(() => _endDate = picked);
   }
 
   @override
@@ -72,8 +96,16 @@ class _SelectNewspaperScreenState extends State<SelectNewspaperScreen> {
   }
 
   @override
+  void dispose() {
+    _addressController.dispose();
+    _zipController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final newspapers = context.watch<AppState>().newspapers;
+    final appState = context.watch<AppState>();
+    final newspapers = appState.newspapers;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Choose Your Newspaper')),
@@ -82,18 +114,24 @@ class _SelectNewspaperScreenState extends State<SelectNewspaperScreen> {
         children: [
           const Text('1. Pick a newspaper', style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          ...newspapers.map(
-            (n) => RadioListTile<Newspaper>(
-              value: n,
-              groupValue: _selected,
-              onChanged: (v) => setState(() => _selected = v),
-              title: Text(n.name),
-              subtitle: Text(
-                '${formatInr(context.watch<AppState>().priceFor(n.id, zip: _zipController.text.trim().isEmpty ? null : _zipController.text.trim()))} / copy',
+          if (!appState.newspapersLoaded)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (newspapers.isEmpty)
+            Text('No newspapers are available right now.', style: TextStyle(color: Colors.grey[600]))
+          else
+            ...newspapers.map(
+              (Newspaper n) => RadioListTile<String>(
+                value: n.id,
+                groupValue: _selectedId,
+                onChanged: (v) => setState(() => _selectedId = v),
+                title: Text(n.name),
+                subtitle: Text('${formatInr(appState.priceFor(n.id, zip: _zip))} / copy'),
+                dense: true,
               ),
-              dense: true,
             ),
-          ),
           const Divider(height: 32),
           const Text('2. Which days should it be delivered?',
               style: TextStyle(fontWeight: FontWeight.bold)),
@@ -102,18 +140,16 @@ class _SelectNewspaperScreenState extends State<SelectNewspaperScreen> {
             spacing: 8,
             runSpacing: 8,
             children: kWeekdayLabels.entries.map((entry) {
-              final dayValue = entry.key;
-              final label = entry.value;
-              final selected = _selectedDays.contains(dayValue);
+              final selected = _selectedDays.contains(entry.key);
               return FilterChip(
-                label: Text(label),
+                label: Text(entry.value),
                 selected: selected,
                 onSelected: (isSelected) {
                   setState(() {
                     if (isSelected) {
-                      _selectedDays.add(dayValue);
+                      _selectedDays.add(entry.key);
                     } else {
-                      _selectedDays.remove(dayValue);
+                      _selectedDays.remove(entry.key);
                     }
                   });
                 },
@@ -122,9 +158,7 @@ class _SelectNewspaperScreenState extends State<SelectNewspaperScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            _selectedDays.isEmpty
-                ? 'Pick at least one day'
-                : '${_selectedDays.length} day(s) a week',
+            _selectedDays.isEmpty ? 'Pick at least one day' : '${_selectedDays.length} day(s) a week',
             style: TextStyle(color: Colors.grey[600]),
           ),
           const Divider(height: 32),
@@ -134,33 +168,49 @@ class _SelectNewspaperScreenState extends State<SelectNewspaperScreen> {
             children: [
               IconButton(
                 icon: const Icon(Icons.remove_circle_outline),
-                onPressed: _copiesPerDelivery > 1
-                    ? () => setState(() => _copiesPerDelivery--)
-                    : null,
+                onPressed: _copiesPerDelivery > 1 ? () => setState(() => _copiesPerDelivery--) : null,
               ),
               Text('$_copiesPerDelivery', style: const TextStyle(fontSize: 20)),
               IconButton(
                 icon: const Icon(Icons.add_circle_outline),
-                onPressed: _copiesPerDelivery < 10
-                    ? () => setState(() => _copiesPerDelivery++)
-                    : null,
+                onPressed: _copiesPerDelivery < 10 ? () => setState(() => _copiesPerDelivery++) : null,
               ),
             ],
           ),
           const Divider(height: 32),
-          const Text('4. Start date', style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text('4. Start and end date', style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text('Deliveries can start from tomorrow.', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
           const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: _pickStartDate,
-            icon: const Icon(Icons.calendar_today, size: 18),
-            label: Text(
-              _startDate == null ? 'Choose a start date' : _formatDate(_startDate!),
-            ),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              alignment: Alignment.centerLeft,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _pickStartDate,
+                  icon: const Icon(Icons.calendar_today, size: 18),
+                  label: Text(_startDate == null ? 'Start date' : formatDate(_startDate!)),
+                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _pickEndDate,
+                  icon: const Icon(Icons.event, size: 18),
+                  label: Text(_endDate == null ? 'End date' : formatDate(_endDate!)),
+                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+                ),
+              ),
+            ],
           ),
+          if (_startDate != null && _endDate != null && _selectedDays.isNotEmpty && _deliveryCount == 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'None of the selected days fall between these dates.',
+                style: TextStyle(color: Colors.red[700], fontSize: 12),
+              ),
+            ),
           const Divider(height: 32),
           const Text('5. Delivery address', style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
@@ -184,17 +234,17 @@ class _SelectNewspaperScreenState extends State<SelectNewspaperScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          if (_selected != null && _selectedDays.isNotEmpty)
+          if (_selectedId != null && _deliveryCount > 0)
             Card(
-              color: Colors.indigo.withOpacity(0.06),
+              color: Colors.indigo.withValues(alpha: 0.06),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Estimated monthly cost'),
+                    Text('Paper charges ($_deliveryCount deliveries)'),
                     Text(
-                      formatInr(_estimatedMonthly),
+                      formatInr(_estimatedPaper(appState)),
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                     ),
                   ],
@@ -208,21 +258,20 @@ class _SelectNewspaperScreenState extends State<SelectNewspaperScreen> {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => CheckoutScreen(
-                          newspaper: _selected!,
+                          newspaper: newspapers.firstWhere((n) => n.id == _selectedId),
                           selectedWeekdays: _selectedDays.toList(),
                           copiesPerDelivery: _copiesPerDelivery,
                           address: _addressController.text.trim(),
                           startDate: _startDate!,
-                          zipCode: _zipController.text.trim().isEmpty
-                              ? null
-                              : _zipController.text.trim(),
+                          endDate: _endDate!,
+                          zipCode: _zip,
                         ),
                       ),
                     );
                   }
                 : null,
             style: FilledButton.styleFrom(padding: const EdgeInsets.all(16)),
-            child: const Text('Continue'),
+            child: const Text('Continue to payment'),
           ),
         ],
       ),

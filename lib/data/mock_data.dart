@@ -1,7 +1,7 @@
 import '../models/newspaper.dart';
 
-/// Placeholder list of top 10 popular English newspapers.
-/// Swap this out later with a real catalog/API.
+/// Default newspaper catalog. It is written to Firestore the first time the app
+/// runs; after that the admin manages newspapers from the Catalog tab.
 final List<Newspaper> kNewspapers = [
   const Newspaper(id: 'nyt', name: 'The New York Times', pricePerCopy: 3.00),
   const Newspaper(id: 'wsj', name: 'The Wall Street Journal', pricePerCopy: 3.50),

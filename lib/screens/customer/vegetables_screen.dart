@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../data/veggie_data.dart';
+import '../../models/produce_item.dart';
+import '../../models/veggie_order.dart';
 import '../../state/app_state.dart';
+import '../../utils/app_constants.dart';
 import '../../utils/currency.dart';
+import '../common/upi_payment_screen.dart';
 
 class VegetablesScreen extends StatefulWidget {
   const VegetablesScreen({super.key});
@@ -13,37 +17,51 @@ class VegetablesScreen extends StatefulWidget {
 
 class _VegetablesScreenState extends State<VegetablesScreen> {
   final Map<String, int> _quantities = {};
-  bool _placing = false;
+  ProduceCategory? _filter; // null = show everything
 
-  double get _total {
-    double sum = 0;
-    for (final v in kVeggies) {
-      sum += (_quantities[v.id] ?? 0) * v.pricePerBundle;
-    }
-    return sum;
+  List<VeggieOrderLine> _lines(List<ProduceItem> catalog) {
+    return [
+      for (final item in catalog)
+        if (item.available && (_quantities[item.id] ?? 0) > 0)
+          VeggieOrderLine(
+            id: item.id,
+            name: item.name,
+            unit: item.unit,
+            unitPrice: item.price,
+            quantity: _quantities[item.id]!,
+          ),
+    ];
   }
 
-  Future<void> _placeOrder(String zip, String address) async {
-    final items = {..._quantities}..removeWhere((_, qty) => qty == 0);
-    if (items.isEmpty) {
+  double _total(List<VeggieOrderLine> lines) => lines.fold(0, (sum, l) => sum + l.total);
+
+  Future<void> _checkout(List<ProduceItem> catalog, String zip, String address) async {
+    final lines = _lines(catalog);
+    if (lines.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Add at least one item to order')),
       );
       return;
     }
+    final appState = context.read<AppState>();
+    final total = _total(lines);
 
-    setState(() => _placing = true);
-    await context.read<AppState>().createVeggieOrder(
-          items: items,
-          totalAmount: _total,
-          zipCode: zip,
-          address: address,
-        );
-    if (!mounted) return;
-    setState(() {
-      _placing = false;
-      _quantities.clear();
-    });
+    final paid = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => UpiPaymentScreen(
+          amount: total,
+          description: 'Greens & vegetables order',
+          onPaid: (ref) => appState.createVeggieOrder(
+            lines: lines,
+            zipCode: zip,
+            address: address,
+            transactionRef: ref,
+          ),
+        ),
+      ),
+    );
+    if (paid != true || !mounted) return;
+    setState(_quantities.clear);
 
     await showDialog(
       context: context,
@@ -51,7 +69,8 @@ class _VegetablesScreenState extends State<VegetablesScreen> {
         icon: Icon(Icons.eco, color: Colors.green[600], size: 48),
         title: const Text('Order placed!'),
         content: const Text(
-          'Your greens are on their way and will reach you in about 15 minutes.',
+          'Payment received. Your order is on its way and will reach you in about 15 minutes. '
+          'You can find the receipt in the Receipts tab.',
           textAlign: TextAlign.center,
         ),
         actionsAlignment: MainAxisAlignment.center,
@@ -60,16 +79,6 @@ class _VegetablesScreenState extends State<VegetablesScreen> {
         ],
       ),
     );
-  }
-
-  String _formatDateTime(DateTime d) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    final hour = d.hour == 0 ? 12 : (d.hour > 12 ? d.hour - 12 : d.hour);
-    final ampm = d.hour >= 12 ? 'PM' : 'AM';
-    return '${d.day} ${months[d.month - 1]}, $hour:${d.minute.toString().padLeft(2, '0')} $ampm';
   }
 
   @override
@@ -94,7 +103,7 @@ class _VegetablesScreenState extends State<VegetablesScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Fresh greens delivery is currently piloted only in zip code $kVeggiePilotZip. '
+                'Fresh greens & vegetable delivery is currently piloted only in zip code $kVeggiePilotZip. '
                 'We\'ll expand to more areas soon.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey[600]),
@@ -105,6 +114,10 @@ class _VegetablesScreenState extends State<VegetablesScreen> {
       );
     }
 
+    final catalog = appState.produce;
+    final visible = catalog.where((p) => _filter == null || p.category == _filter).toList();
+    final lines = _lines(catalog);
+    final total = _total(lines);
     final myOrders = appState.veggieOrdersForCustomer(appState.currentUser!.username);
 
     return ListView(
@@ -123,66 +136,102 @@ class _VegetablesScreenState extends State<VegetablesScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Farm-fresh greens, delivered to your door in 15 minutes.',
+                  'Farm-fresh greens & vegetables, delivered to your door in 15 minutes.',
                   style: TextStyle(color: Colors.green[900], fontSize: 12.5, fontWeight: FontWeight.w600),
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 20),
-        const Text('Choose your greens', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        const SizedBox(height: 12),
-        ...kVeggies.map((v) {
-          final qty = _quantities[v.id] ?? 0;
-          return Card(
-            elevation: 0,
-            margin: const EdgeInsets.only(bottom: 8),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: Colors.grey.withOpacity(0.15)),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 8,
+          children: [
+            ChoiceChip(
+              label: const Text('All'),
+              selected: _filter == null,
+              onSelected: (_) => setState(() => _filter = null),
             ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(v.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                        Text('${formatInr(v.pricePerBundle)} / bundle',
-                            style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.remove_circle_outline),
-                    onPressed: qty > 0 ? () => setState(() => _quantities[v.id] = qty - 1) : null,
-                  ),
-                  Text('$qty', style: const TextStyle(fontSize: 16)),
-                  IconButton(
-                    icon: const Icon(Icons.add_circle_outline, color: Colors.green),
-                    onPressed: () => setState(() => _quantities[v.id] = qty + 1),
-                  ),
-                ],
+            for (final c in ProduceCategory.values)
+              ChoiceChip(
+                label: Text(c.label),
+                selected: _filter == c,
+                onSelected: (_) => setState(() => _filter = c),
               ),
-            ),
-          );
-        }),
+          ],
+        ),
         const SizedBox(height: 12),
-        if (_total > 0)
+        if (!appState.produceLoaded)
+          const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (visible.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Center(
+              child: Text('Nothing here yet - check back soon.',
+                  style: TextStyle(color: Colors.grey[600])),
+            ),
+          )
+        else
+          ...visible.map((item) {
+            final qty = _quantities[item.id] ?? 0;
+            return Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(item.name,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: item.available ? null : Colors.grey,
+                              )),
+                          Text(
+                            item.available
+                                ? '${formatInr(item.price)} / ${item.unit} · ${item.category.label}'
+                                : 'Out of stock',
+                            style: TextStyle(
+                              color: item.available ? Colors.grey[600] : Colors.red[300],
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (item.available) ...[
+                      IconButton(
+                        icon: const Icon(Icons.remove_circle_outline),
+                        onPressed: qty > 0 ? () => setState(() => _quantities[item.id] = qty - 1) : null,
+                      ),
+                      Text('$qty', style: const TextStyle(fontSize: 16)),
+                      IconButton(
+                        icon: const Icon(Icons.add_circle_outline, color: Colors.green),
+                        onPressed: () => setState(() => _quantities[item.id] = qty + 1),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          }),
+        const SizedBox(height: 12),
+        if (total > 0)
           Card(
-            elevation: 0,
-            color: Colors.green.withOpacity(0.06),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            color: Colors.green.withValues(alpha: 0.06),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Total', style: TextStyle(fontWeight: FontWeight.bold)),
-                  Text(formatInr(_total),
+                  Text('Total (${lines.length} item${lines.length == 1 ? '' : 's'})',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text(formatInr(total),
                       style: const TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 18, color: Colors.green)),
                 ],
@@ -191,14 +240,9 @@ class _VegetablesScreenState extends State<VegetablesScreen> {
           ),
         const SizedBox(height: 12),
         FilledButton.icon(
-          onPressed: _placing || _total == 0 ? null : () => _placeOrder(zip!, profile!.address),
-          icon: _placing
-              ? const SizedBox(
-                  height: 16,
-                  width: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : const Icon(Icons.shopping_basket_outlined),
-          label: Text(_placing ? 'Placing order...' : 'Place Order'),
+          onPressed: total == 0 ? null : () => _checkout(catalog, zip!, profile!.address),
+          icon: const Icon(Icons.qr_code_2),
+          label: const Text('Pay with UPI'),
           style: FilledButton.styleFrom(
             backgroundColor: Colors.green[700],
             padding: const EdgeInsets.all(16),
@@ -206,29 +250,20 @@ class _VegetablesScreenState extends State<VegetablesScreen> {
         ),
         if (myOrders.isNotEmpty) ...[
           const SizedBox(height: 28),
-          const Text('Your greens orders', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const Text('Your orders', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 8),
-          ...myOrders.map((o) {
-            final itemsLabel = o.items.entries
-                .map((e) => '${kVeggies.firstWhere((v) => v.id == e.key).name} x${e.value}')
-                .join(', ');
-            return Card(
-              elevation: 0,
-              margin: const EdgeInsets.only(bottom: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Colors.grey.withOpacity(0.15)),
-              ),
-              child: ListTile(
-                leading: const CircleAvatar(
-                    backgroundColor: Color(0xFFE8F5E9), child: Icon(Icons.eco, color: Colors.green)),
-                title: Text(itemsLabel, style: const TextStyle(fontSize: 13)),
-                subtitle: Text('Delivery by ${_formatDateTime(o.expectedDeliveryBy)}',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                trailing: Text(formatInr(o.totalAmount), style: const TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            );
-          }),
+          ...myOrders.map((o) => Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  leading: const CircleAvatar(
+                      backgroundColor: Color(0xFFE8F5E9), child: Icon(Icons.eco, color: Colors.green)),
+                  title: Text(o.itemsSummary, style: const TextStyle(fontSize: 13)),
+                  subtitle: Text('Delivery by ${formatDateTime(o.expectedDeliveryBy)}',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                  trailing: Text(formatInr(o.totalAmount),
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              )),
         ],
       ],
     );

@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 import '../../models/newspaper.dart';
 import '../../models/subscription.dart';
 import '../../state/app_state.dart';
+import '../../utils/app_constants.dart';
 import '../../utils/currency.dart';
+import '../common/upi_payment_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final Newspaper newspaper;
@@ -11,6 +13,7 @@ class CheckoutScreen extends StatefulWidget {
   final int copiesPerDelivery;
   final String address;
   final DateTime startDate;
+  final DateTime endDate;
   final String? zipCode;
 
   const CheckoutScreen({
@@ -20,6 +23,7 @@ class CheckoutScreen extends StatefulWidget {
     required this.copiesPerDelivery,
     required this.address,
     required this.startDate,
+    required this.endDate,
     this.zipCode,
   });
 
@@ -28,61 +32,60 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
-  bool _submitting = false;
-
   String get _weekdaysLabel {
     final sorted = [...widget.selectedWeekdays]..sort();
     return sorted.map((d) => kWeekdayLabels[d]).join(', ');
   }
 
-  String _formatDate(DateTime d) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${d.day} ${months[d.month - 1]} ${d.year}';
-  }
+  SubscriptionQuote _quote(AppState appState) => appState.quoteSubscription(
+        newspaperId: widget.newspaper.id,
+        weekdays: widget.selectedWeekdays,
+        copies: widget.copiesPerDelivery,
+        startDate: widget.startDate,
+        endDate: widget.endDate,
+        zip: widget.zipCode,
+      );
 
-  ({double paper, double delivery, double gst, double total}) _breakdown(AppState appState) {
-    final price = appState.priceFor(widget.newspaper.id, zip: widget.zipCode);
-    final paper = price * widget.copiesPerDelivery * widget.selectedWeekdays.length * 4.33;
-    final delivery = appState.deliveryChargeForZip(widget.zipCode);
-    final gst = (paper + delivery) * (appState.gstPercent / 100);
-    return (paper: paper, delivery: delivery, gst: gst, total: paper + delivery + gst);
-  }
+  Future<void> _pay() async {
+    final appState = context.read<AppState>();
+    final quote = _quote(appState);
 
-  Future<void> _submit() async {
-    setState(() => _submitting = true);
-
-    await context.read<AppState>().createSubscription(
-          newspaper: widget.newspaper,
-          selectedWeekdays: widget.selectedWeekdays,
-          copiesPerDelivery: widget.copiesPerDelivery,
-          address: widget.address,
-          startDate: widget.startDate,
-          zipCode: widget.zipCode,
-        );
-
-    if (!mounted) return;
-    setState(() => _submitting = false);
+    final paid = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => UpiPaymentScreen(
+          amount: quote.total,
+          description: '${widget.newspaper.name} subscription',
+          onPaid: (ref) async {
+            final error = await appState.createSubscription(
+              newspaper: widget.newspaper,
+              selectedWeekdays: widget.selectedWeekdays,
+              copiesPerDelivery: widget.copiesPerDelivery,
+              address: widget.address,
+              startDate: widget.startDate,
+              endDate: widget.endDate,
+              zipCode: widget.zipCode,
+              transactionRef: ref,
+            );
+            if (error != null) throw Exception(error);
+          },
+        ),
+      ),
+    );
+    if (paid != true || !mounted) return;
 
     await showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        icon: Icon(Icons.hourglass_top, color: Colors.orange[600], size: 48),
-        title: const Text('Request submitted'),
-        content: const Text(
-          'Your subscription request has been sent for approval. '
-          'We\'ll notify you as soon as it\'s accepted - your dashboard will '
-          'update automatically once it is.',
+        icon: Icon(Icons.check_circle, color: Colors.green[600], size: 48),
+        title: const Text('Subscription confirmed'),
+        content: Text(
+          'Payment received. Your ${widget.newspaper.name} deliveries start on '
+          '${formatDate(widget.startDate)}. You can find the receipt in the Receipts tab.',
           textAlign: TextAlign.center,
         ),
         actionsAlignment: MainAxisAlignment.center,
         actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
+          FilledButton(onPressed: () => Navigator.of(context).pop(), child: const Text('OK')),
         ],
       ),
     );
@@ -94,11 +97,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final b = _breakdown(appState);
+    final b = _quote(appState);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F3FA),
-      appBar: AppBar(title: const Text('Confirm Subscription')),
+      appBar: AppBar(title: const Text('Confirm & Pay')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -115,7 +118,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: Colors.deepPurple.withOpacity(0.1),
+                          color: Colors.deepPurple.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Icon(Icons.newspaper, color: Colors.deepPurple),
@@ -132,7 +135,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   const SizedBox(height: 16),
                   _Row(label: 'Delivery days', value: _weekdaysLabel),
                   _Row(label: 'Copies per delivery', value: '${widget.copiesPerDelivery}'),
-                  _Row(label: 'Start date', value: _formatDate(widget.startDate)),
+                  _Row(label: 'Start date', value: formatDate(widget.startDate)),
+                  _Row(label: 'End date', value: formatDate(widget.endDate)),
+                  _Row(label: 'Total deliveries', value: '${b.deliveries}'),
                   _Row(label: 'Address', value: widget.address),
                   if (widget.zipCode != null) _Row(label: 'Zip code', value: widget.zipCode!),
                 ],
@@ -148,7 +153,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('First month\'s estimated bill',
+                  const Text('Amount to pay',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                   const SizedBox(height: 12),
                   _Row(label: 'Paper charges', value: formatInr(b.paper)),
@@ -190,8 +195,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'No payment is collected now. You\'ll be billed at the end of the month '
-                    'from the Payments tab, once your subscription is approved and active.',
+                    'Payment is due up front. Your subscription is confirmed as soon as the UPI payment is done.',
                     style: TextStyle(color: Colors.orange[900], fontSize: 12.5),
                   ),
                 ),
@@ -199,16 +203,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          FilledButton(
-            onPressed: _submitting ? null : _submit,
+          FilledButton.icon(
+            onPressed: b.deliveries == 0 ? null : _pay,
+            icon: const Icon(Icons.qr_code_2),
+            label: Text('Pay ${formatInr(b.total)} with UPI'),
             style: FilledButton.styleFrom(padding: const EdgeInsets.all(16)),
-            child: _submitting
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text('Submit for Approval'),
           ),
         ],
       ),

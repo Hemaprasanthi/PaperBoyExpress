@@ -227,7 +227,7 @@ class _PricingScreenState extends State<PricingScreen> {
         const Text('Delivery charges by zip', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
         const SizedBox(height: 4),
         Text(
-          'A flat delivery charge added per zip code, on top of paper charges.',
+          'A flat delivery charge added once to each subscription for this zip code, on top of paper charges.',
           style: TextStyle(color: Colors.grey[600], fontSize: 13),
         ),
         const SizedBox(height: 12),
