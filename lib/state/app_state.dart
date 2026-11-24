@@ -238,7 +238,16 @@ class AppState extends ChangeNotifier {
     );
     if (demoMatch.isNotEmpty) {
       currentUser = demoMatch.first;
-      currentCustomerProfile = null;
+      // The demo customer gets a profile in the greens pilot zip so Fresh Greens is visible.
+      currentCustomerProfile = currentUser!.role == UserRole.customer
+          ? const CustomerProfile(
+              uid: 'customer',
+              name: 'Demo Customer',
+              address: '12, Demo Street, Bengaluru',
+              zipCode: kVeggiePilotZip,
+              phone: '0000000000',
+            )
+          : null;
       notifyListeners();
       return null;
     }
